@@ -227,7 +227,7 @@ export async function postToThreadsViaAdsPower(
 
     // Click compose button
     console.log('Looking for compose button...');
-    const composeButton = await page.waitForSelector('[aria-label*="ompose"], [aria-label*="New thread"], button[role="button"]:has-text("New thread")', {
+    const composeButton = await page.waitForSelector('[aria-label="Create post"]', {
       timeout: 10000,
     });
 
@@ -237,7 +237,7 @@ export async function postToThreadsViaAdsPower(
 
     // Find the text input
     console.log('Finding text input...');
-    const textInput = await page.waitForSelector('[contenteditable="true"], textarea[placeholder*="thread"]', {
+    const textInput = await page.waitForSelector('[contenteditable="true"]', {
       timeout: 10000,
     });
 
@@ -262,7 +262,7 @@ export async function postToThreadsViaAdsPower(
     if (post.media && post.media.length > 0) {
       console.log('Uploading media...');
       // Find media upload button
-      const mediaButton = await page.waitForSelector('[aria-label*="edia"], input[type="file"][accept*="image"]', {
+      const mediaButton = await page.waitForSelector('input[type="file"]', {
         timeout: 5000,
       }).catch(() => null);
 
@@ -316,7 +316,7 @@ export async function postToThreadsViaAdsPower(
     console.log('Looking for Post button...');
     await randomDelay(1500, 2500); // Think before posting
 
-    const postButton = await page.waitForSelector('button:has-text("Post"), [aria-label*="Post"]', {
+    const postButton = await page.waitForSelector('[type="submit"]', {
       timeout: 10000,
     });
 
