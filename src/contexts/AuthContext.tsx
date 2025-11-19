@@ -84,6 +84,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+      // Ensure user document exists in Firestore (create if missing)
+      const userRef = doc(db, 'users', userCredential.user.uid);
+      await setDoc(userRef, {
+        email: userCredential.user.email,
+        displayName: userCredential.user.displayName,
+        photoURL: userCredential.user.photoURL,
+        updatedAt: serverTimestamp(),
+      }, { merge: true }); // merge: true will not overwrite existing data
+
       setFirebaseUser(userCredential.user);
       setCurrentUser(convertFirebaseUser(userCredential.user));
     } catch (error: any) {
