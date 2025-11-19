@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '@/services/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccountStore } from '@/store/accountStore';
@@ -229,12 +230,79 @@ export const PostComposer = ({
     if (data.scheduledFor) {
       savePost(data, 'scheduled');
     } else {
-      savePost(data, 'published');
+      // If no scheduled time, save as scheduled for immediate publishing
+      savePostAndPublish(data);
     }
   };
 
   const saveDraft = () => {
     handleSubmit((data) => savePost(data, 'draft'))();
+  };
+
+  // Save post and publish immediately via Cloud Function
+  const savePostAndPublish = async (data: PostFormData) => {
+    try {
+      setIsSubmitting(true);
+
+      // Save post as scheduled for now (to trigger Cloud Function)
+      const postData = {
+        ...data,
+        scheduledFor: new Date(), // Schedule for immediate publishing
+      };
+
+      // Save to Firestore
+      let postId: string;
+      if (editPost) {
+        const postRef = doc(db, 'users', currentUser!.uid, 'posts', editPost.id);
+        await updateDoc(postRef, {
+          ...postData,
+          scheduledFor: postData.scheduledFor,
+          status: 'scheduled',
+          updatedAt: serverTimestamp(),
+        });
+        postId = editPost.id;
+      } else {
+        const postsRef = collection(db, 'users', currentUser!.uid, 'posts');
+        const docRef = await addDoc(postsRef, {
+          ...postData,
+          scheduledFor: postData.scheduledFor,
+          status: 'scheduled',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        postId = docRef.id;
+      }
+
+      // Call Cloud Function to publish immediately
+      const functions = getFunctions();
+      const publishPostNow = httpsCallable(functions, 'publishPostNow');
+
+      try {
+        await publishPostNow({ postId });
+        toast({
+          title: 'Publishing post',
+          description: 'Your post is being published now...',
+        });
+      } catch (error) {
+        console.error('Error calling Cloud Function:', error);
+        toast({
+          title: 'Post saved',
+          description: 'Post saved but publishing failed. Will retry automatically.',
+          variant: 'destructive',
+        });
+      }
+
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error publishing post:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to publish post. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const characterCount = watchedFields.content?.length || 0;

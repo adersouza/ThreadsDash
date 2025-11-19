@@ -7,12 +7,7 @@
 
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-
-// Note: These imports would need to be adapted for Cloud Functions
-// The services need to be either:
-// 1. Duplicated in functions/src with Node.js compatible code
-// 2. Published as a shared npm package
-// For now, we'll inline the critical logic
+import { postToThreadsApi } from './posting/threadsApi';
 
 const db = admin.firestore();
 
@@ -171,30 +166,40 @@ async function updateRateLimitCounters(userId: string, accountId: string): Promi
 
 /**
  * Post using unofficial API method
- * (Simplified version - in production, import from threadsApiUnofficial service)
  */
 async function postViaApi(account: Account, post: Post): Promise<{
   success: boolean;
   threadId?: string;
   error?: string;
 }> {
-  // This is a placeholder - in production, you would:
-  // 1. Import the actual threadsApiUnofficial service
-  // 2. Or duplicate the logic here
-  // 3. Or publish it as a shared npm package
-
   console.log(`Posting via API for account ${account.username}`);
   console.log(`Content: ${post.content}`);
 
-  // Placeholder logic - replace with actual API calls
   try {
-    // In production: return await postToThreadsUnofficial(account, post);
-    console.log('API posting not yet implemented in Cloud Function');
-    return {
-      success: false,
-      error: 'API posting not yet implemented',
-    };
+    // Validate required credentials
+    if (!account.instagramToken || !account.instagramUserId) {
+      return {
+        success: false,
+        error: 'Instagram credentials not configured for this account',
+      };
+    }
+
+    // Call the actual posting API
+    const result = await postToThreadsApi(
+      account.instagramToken,
+      account.instagramUserId,
+      {
+        content: post.content,
+        media: post.media,
+        topics: post.topics,
+        settings: post.settings,
+      },
+      account.id
+    );
+
+    return result;
   } catch (error: any) {
+    console.error('Error posting via API:', error);
     return {
       success: false,
       error: error.message || 'Unknown error',
@@ -204,7 +209,12 @@ async function postViaApi(account: Account, post: Post): Promise<{
 
 /**
  * Post using browser automation method
- * (Simplified version - in production, import from adsPowerService)
+ *
+ * NOTE: Browser automation cannot run in Cloud Functions.
+ * To use this method, you need to:
+ * 1. Deploy a separate server with AdsPower and Playwright
+ * 2. Create an HTTP endpoint on that server
+ * 3. Call that endpoint from here
  */
 async function postViaBrowser(account: Account, post: Post): Promise<{
   success: boolean;
@@ -214,15 +224,30 @@ async function postViaBrowser(account: Account, post: Post): Promise<{
   console.log(`Posting via browser for account ${account.username}`);
   console.log(`Content: ${post.content}`);
 
-  // Placeholder logic - replace with actual browser automation
   try {
-    // In production: return await postToThreadsViaAdsPower(account, post);
-    console.log('Browser posting not yet implemented in Cloud Function');
+    // Browser automation requires a separate server
+    // Cloud Functions cannot run headless browsers with displays
+
+    // Example implementation if you have a posting server:
+    // const response = await fetch('https://your-posting-server.com/api/post', {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({
+    //     profileId: account.adsPowerProfileId,
+    //     content: post.content,
+    //     media: post.media,
+    //     topics: post.topics,
+    //     settings: post.settings,
+    //   }),
+    // });
+    // return await response.json();
+
     return {
       success: false,
-      error: 'Browser posting not yet implemented',
+      error: 'Browser automation requires a separate server. Please use API method or deploy a posting server.',
     };
   } catch (error: any) {
+    console.error('Error posting via browser:', error);
     return {
       success: false,
       error: error.message || 'Unknown error',
