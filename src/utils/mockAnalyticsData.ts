@@ -106,7 +106,6 @@ export function generateMockTopPosts(accountId: string, count: number = 10): Top
  */
 export function generateMockOptimalTimes(): OptimalTimeSlot[] {
   const optimalTimes: OptimalTimeSlot[] = [];
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   // Generate some realistic optimal times
   const timeSlots = [
@@ -122,7 +121,7 @@ export function generateMockOptimalTimes(): OptimalTimeSlot[] {
     { hour: 13, dayOfWeek: 5, baseScore: 0.06 }, // Friday 1 PM
   ];
 
-  timeSlots.forEach((slot, index) => {
+  timeSlots.forEach((slot) => {
     const variance = (Math.random() - 0.5) * 0.02;
     const avgEngagement = slot.baseScore + variance;
     const postCount = Math.floor(Math.random() * 20) + 10;

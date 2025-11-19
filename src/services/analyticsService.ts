@@ -16,7 +16,6 @@ import type {
   TopPost,
   GrowthDataPoint,
 } from '@/types/analytics';
-import type { Post } from '@/types/post';
 
 /**
  * Get analytics data for an account within a date range

@@ -24,6 +24,18 @@ export interface ThreadsAccount {
   status: 'active' | 'inactive' | 'suspended' | 'pending';
   accessToken?: string; // Encrypted access token for Threads API
   refreshToken?: string; // Encrypted refresh token
+
+  // Posting Method Configuration
+  postingMethod: 'browser' | 'api'; // Choose between browser automation or API
+  instagramToken?: string; // Encrypted Instagram token for unofficial API method
+  instagramUserId?: string; // Instagram user ID
+  adsPowerProfileId?: string; // AdsPower profile ID for browser automation
+  lastPostAt?: Date; // Last time a post was published (for rate limiting)
+
+  // Rate Limiting Tracking
+  postsLastHour?: number; // Number of posts in the last hour
+  postsToday?: number; // Number of posts today
+  rateLimitResetAt?: Date; // When rate limits reset
 }
 
 // Post Types
@@ -187,4 +199,27 @@ export interface AIContentResponse {
   generatedText: string;
   suggestions: string[];
   hashtagSuggestions: string[];
+}
+
+// Posting Service Types
+export interface PostingResult {
+  success: boolean;
+  threadId?: string; // The ID of the created thread
+  error?: string;
+  timestamp: Date;
+}
+
+export interface RateLimitInfo {
+  canPost: boolean;
+  reason?: string;
+  nextAvailableTime?: Date;
+  postsRemainingThisHour: number;
+  postsRemainingToday: number;
+}
+
+export interface AdsPowerProfile {
+  id: string;
+  name: string;
+  browserType: string;
+  status: 'active' | 'inactive';
 }
