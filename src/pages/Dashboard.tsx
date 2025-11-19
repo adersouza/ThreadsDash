@@ -49,10 +49,18 @@ export const Dashboard = () => {
             <CardTitle className="text-destructive">Error</CardTitle>
             <CardDescription>Failed to load accounts</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">{error}</p>
+            <p className="text-sm text-muted-foreground">
+              You can still add an account to get started:
+            </p>
+            <Button onClick={() => setAccountModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Account
+            </Button>
           </CardContent>
         </Card>
+        <AccountModal open={accountModalOpen} onOpenChange={setAccountModalOpen} />
       </div>
     );
   }
