@@ -28,3 +28,6 @@ dist-ssr
 .env.local
 .env.production.local
 .env.development.local
+
+# TypeScript build cache
+*.tsbuildinfo
