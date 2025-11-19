@@ -10,7 +10,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
-import { auth } from '@/services/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '@/services/firebase';
 import type { User } from '@/types';
 
 interface AuthContextType {
@@ -61,6 +62,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, { displayName });
 
+      // Create user document in Firestore
+      const userRef = doc(db, 'users', userCredential.user.uid);
+      await setDoc(userRef, {
+        email: email,
+        displayName: displayName,
+        photoURL: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
       // Update local state
       setFirebaseUser(userCredential.user);
       setCurrentUser(convertFirebaseUser(userCredential.user));
@@ -85,6 +96,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const provider = new GoogleAuthProvider();
       const userCredential = await signInWithPopup(auth, provider);
+
+      // Create user document in Firestore if it doesn't exist
+      const userRef = doc(db, 'users', userCredential.user.uid);
+      await setDoc(userRef, {
+        email: userCredential.user.email,
+        displayName: userCredential.user.displayName,
+        photoURL: userCredential.user.photoURL,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true }); // merge: true will not overwrite if document exists
+
       setFirebaseUser(userCredential.user);
       setCurrentUser(convertFirebaseUser(userCredential.user));
     } catch (error: any) {
