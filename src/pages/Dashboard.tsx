@@ -1,14 +1,30 @@
+import { useState } from 'react';
 import { useAccountStore } from '@/store/accountStore';
+import { usePostStore } from '@/store/postStore';
 import { useAccounts } from '@/hooks/useAccounts';
+import { usePosts } from '@/hooks/usePosts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { AccountCard } from '@/components/dashboard/AccountCard';
-import { Plus, Loader2 } from 'lucide-react';
+import { PostComposer } from '@/components/posts/PostComposer';
+import { Plus, Loader2, FileText, Calendar, Edit } from 'lucide-react';
 
 export const Dashboard = () => {
   const { accounts, loading, error } = useAccountStore();
+  const { posts } = usePostStore();
   const { isInitialized } = useAccounts();
+  usePosts();
+  const [composerOpen, setComposerOpen] = useState(false);
+
+  // Calculate post stats
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const postsToday = posts.filter(
+    (p) => p.createdAt && new Date(p.createdAt).setHours(0, 0, 0, 0) === today.getTime()
+  ).length;
+  const scheduledPosts = posts.filter((p) => p.status === 'scheduled').length;
+  const draftPosts = posts.filter((p) => p.status === 'draft').length;
 
   // Show loading state
   if (loading || !isInitialized) {
@@ -58,6 +74,46 @@ export const Dashboard = () => {
       {/* Stats Overview */}
       <StatsOverview accounts={accounts} />
 
+      {/* Post Stats */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Posts Today</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{postsToday}</div>
+            <p className="text-xs text-muted-foreground">
+              Created in the last 24 hours
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Scheduled Posts</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{scheduledPosts}</div>
+            <p className="text-xs text-muted-foreground">
+              Ready to be published
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Draft Posts</CardTitle>
+            <Edit className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{draftPosts}</div>
+            <p className="text-xs text-muted-foreground">
+              Waiting to be scheduled
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Accounts Section */}
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -96,6 +152,18 @@ export const Dashboard = () => {
           </Card>
         )}
       </div>
+
+      {/* Floating Action Button for Create Post */}
+      <Button
+        size="lg"
+        className="fixed bottom-8 right-8 h-14 w-14 rounded-full shadow-lg"
+        onClick={() => setComposerOpen(true)}
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
+
+      {/* Post Composer Modal */}
+      <PostComposer open={composerOpen} onOpenChange={setComposerOpen} />
     </div>
   );
 };

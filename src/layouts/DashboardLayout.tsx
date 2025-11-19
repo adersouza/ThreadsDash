@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAccountStore } from '@/store/accountStore';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
+// import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
   DropdownMenuContent,

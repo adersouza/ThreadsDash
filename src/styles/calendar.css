@@ -1,0 +1,237 @@
+/* Custom styles for react-big-calendar with purple theme */
+
+.rbc-calendar {
+  font-family: inherit;
+}
+
+.rbc-header {
+  padding: 12px 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.rbc-today {
+  background-color: hsl(var(--primary) / 0.05);
+}
+
+.rbc-off-range-bg {
+  background-color: hsl(var(--muted) / 0.3);
+}
+
+.rbc-toolbar {
+  padding: 16px 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.rbc-toolbar button {
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--background));
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rbc-toolbar button:hover {
+  background-color: hsl(var(--accent));
+}
+
+.rbc-toolbar button:active,
+.rbc-toolbar button.rbc-active {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+
+.rbc-month-view,
+.rbc-time-view,
+.rbc-agenda-view {
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rbc-month-row {
+  border-color: hsl(var(--border));
+}
+
+.rbc-day-bg {
+  border-color: hsl(var(--border));
+}
+
+.rbc-date-cell {
+  padding: 4px 8px;
+}
+
+.rbc-date-cell > a {
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+}
+
+.rbc-event {
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  border: none;
+}
+
+.rbc-event:hover {
+  opacity: 0.8;
+}
+
+.rbc-event-label {
+  font-size: 0.75rem;
+}
+
+.rbc-event-content {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rbc-show-more {
+  color: hsl(var(--primary));
+  font-size: 0.75rem;
+  font-weight: 500;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin: 2px 0;
+}
+
+.rbc-show-more:hover {
+  background-color: hsl(var(--accent));
+  border-radius: 4px;
+}
+
+.rbc-overlay {
+  background-color: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.rbc-overlay-header {
+  padding: 12px;
+  border-bottom: 1px solid hsl(var(--border));
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.rbc-time-header {
+  border-color: hsl(var(--border));
+}
+
+.rbc-time-content {
+  border-color: hsl(var(--border));
+}
+
+.rbc-time-slot {
+  border-color: hsl(var(--border));
+}
+
+.rbc-current-time-indicator {
+  background-color: hsl(var(--primary));
+  height: 2px;
+}
+
+.rbc-allday-cell {
+  border-color: hsl(var(--border));
+}
+
+.rbc-time-column {
+  border-color: hsl(var(--border));
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid hsl(var(--border) / 0.3);
+}
+
+.rbc-time-header-content {
+  border-left: 1px solid hsl(var(--border));
+}
+
+.rbc-time-header-gutter {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.rbc-label {
+  padding: 0 8px;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.rbc-agenda-view {
+  padding: 16px;
+}
+
+.rbc-agenda-view table {
+  border-color: hsl(var(--border));
+}
+
+.rbc-agenda-date-cell,
+.rbc-agenda-time-cell {
+  padding: 8px;
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+.rbc-agenda-event-cell {
+  padding: 8px;
+  border-color: hsl(var(--border));
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 640px) {
+  .rbc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rbc-toolbar-label {
+    text-align: center;
+    padding: 8px 0;
+    font-size: 1rem;
+  }
+
+  .rbc-toolbar button {
+    flex: 1;
+    min-width: auto;
+  }
+
+  .rbc-header {
+    font-size: 0.75rem;
+    padding: 8px 4px;
+  }
+
+  .rbc-event {
+    font-size: 0.75rem;
+    padding: 2px 4px;
+  }
+
+  .rbc-date-cell > a {
+    font-size: 0.75rem;
+  }
+}
+
+/* Dark mode support (if needed) */
+.dark .rbc-off-range-bg {
+  background-color: hsl(var(--muted) / 0.2);
+}
+
+.dark .rbc-today {
+  background-color: hsl(var(--primary) / 0.1);
+}
