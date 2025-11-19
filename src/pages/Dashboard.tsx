@@ -1,103 +1,101 @@
-import { useAuth } from '@/contexts/AuthContext';
+import { useAccountStore } from '@/store/accountStore';
+import { useAccounts } from '@/hooks/useAccounts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useNavigate } from 'react-router-dom';
+import { StatsOverview } from '@/components/dashboard/StatsOverview';
+import { AccountCard } from '@/components/dashboard/AccountCard';
+import { Plus, Loader2 } from 'lucide-react';
 
 export const Dashboard = () => {
-  const { currentUser, logout } = useAuth();
-  const navigate = useNavigate();
+  const { accounts, loading, error } = useAccountStore();
+  const { isInitialized } = useAccounts();
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Failed to logout:', error);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-primary">ThreadsDash</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {currentUser?.displayName || currentUser?.email}
-            </span>
-            <Button variant="outline" onClick={handleLogout}>
-              Logout
-            </Button>
-          </div>
+  // Show loading state
+  if (loading || !isInitialized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading accounts...</p>
         </div>
-      </header>
+      </div>
+    );
+  }
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Welcome to ThreadsDash!</h2>
-          <p className="text-muted-foreground">
-            Your Threads account management dashboard is ready to go.
-          </p>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Accounts</CardTitle>
-              <CardDescription>Manage your Threads accounts</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">0</div>
-              <p className="text-sm text-muted-foreground mt-2">
-                No accounts connected yet
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Posts</CardTitle>
-              <CardDescription>Total posts published</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">0</div>
-              <p className="text-sm text-muted-foreground mt-2">
-                Start creating content
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Engagement</CardTitle>
-              <CardDescription>Total engagement rate</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">0%</div>
-              <p className="text-sm text-muted-foreground mt-2">
-                No data available yet
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="mt-6">
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="max-w-md">
           <CardHeader>
-            <CardTitle>Getting Started</CardTitle>
-            <CardDescription>
-              Follow these steps to set up your account
-            </CardDescription>
+            <CardTitle className="text-destructive">Error</CardTitle>
+            <CardDescription>Failed to load accounts</CardDescription>
           </CardHeader>
           <CardContent>
-            <ol className="list-decimal list-inside space-y-2">
-              <li>Connect your first Threads account</li>
-              <li>Import your existing posts</li>
-              <li>Schedule new content</li>
-              <li>Monitor your analytics</li>
-            </ol>
+            <p className="text-sm text-muted-foreground">{error}</p>
           </CardContent>
         </Card>
-      </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Manage and monitor your Threads accounts
+          </p>
+        </div>
+        <Button>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Account
+        </Button>
+      </div>
+
+      {/* Stats Overview */}
+      <StatsOverview accounts={accounts} />
+
+      {/* Accounts Section */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-semibold">Accounts</h2>
+          {accounts.length > 0 && (
+            <span className="text-sm text-muted-foreground">
+              {accounts.length} account{accounts.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        {accounts.length > 0 ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {accounts.map((account) => (
+              <AccountCard key={account.id} account={account} />
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>No Accounts Connected</CardTitle>
+              <CardDescription>
+                Get started by connecting your first Threads account
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Connect your Threads account to start managing your content,
+                tracking analytics, and scheduling posts.
+              </p>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Connect Your First Account
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 };
