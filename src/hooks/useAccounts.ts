@@ -21,11 +21,10 @@ export const useAccounts = () => {
     setLoading(true);
     setError(null);
 
-    // Create query for user's accounts
-    const accountsRef = collection(db, 'accounts');
+    // Create query for user's accounts (subcollection under users/{userId}/accounts)
+    const accountsRef = collection(db, 'users', currentUser.uid, 'accounts');
     const q = query(
       accountsRef,
-      where('userId', '==', currentUser.uid),
       orderBy('createdAt', 'desc')
     );
 
