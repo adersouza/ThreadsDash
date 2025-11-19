@@ -10,4 +10,12 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    exclude: ['playwright-core'],
+  },
+  build: {
+    rollupOptions: {
+      external: ['playwright-core'],
+    },
+  },
 })
