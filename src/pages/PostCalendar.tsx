@@ -53,6 +53,7 @@ export const PostCalendar = () => {
   const [accountFilter, setAccountFilter] = useState<string>('all');
   const [composerOpen, setComposerOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [prefilledDate, setPrefilledDate] = useState<Date | null>(null);
   
 
   // Get account color
@@ -92,7 +93,7 @@ export const PostCalendar = () => {
           color: getAccountColor(post.accountId),
         };
       });
-  }, [posts, accountFilter, accounts, getAccountColor]);
+  }, [posts, accountFilter, getAccountColor]);
 
   // Handle event click
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
@@ -103,7 +104,8 @@ export const PostCalendar = () => {
 
   // Handle slot selection (create new post)
   const handleSelectSlot = useCallback(
-    () => {
+    (slotInfo: { start: Date; end: Date }) => {
+      setPrefilledDate(slotInfo.start);
       setSelectedPost(null);
       selectPost(null);
       setComposerOpen(true);
@@ -271,10 +273,12 @@ export const PostCalendar = () => {
           setComposerOpen(open);
           if (!open) {
             setSelectedPost(null);
+            setPrefilledDate(null);
             selectPost(null);
           }
         }}
         editPost={selectedPost}
+        prefilledScheduledDate={prefilledDate}
       />
     </div>
   );

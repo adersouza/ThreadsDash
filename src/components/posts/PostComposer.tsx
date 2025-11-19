@@ -54,12 +54,14 @@ interface PostComposerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editPost?: Post | null;
+  prefilledScheduledDate?: Date | null;
 }
 
 export const PostComposer = ({
   open,
   onOpenChange,
   editPost,
+  prefilledScheduledDate,
 }: PostComposerProps) => {
   const { currentUser } = useAuth();
   const { accounts } = useAccountStore();
@@ -93,7 +95,7 @@ export const PostComposer = ({
     (acc) => acc.id === watchedFields.accountId
   );
 
-  // Load edit post data
+  // Load edit post data or prefilled scheduled date
   useEffect(() => {
     if (editPost && open) {
       setValue('accountId', editPost.accountId);
@@ -103,12 +105,15 @@ export const PostComposer = ({
       setValue('allowReplies', editPost.settings.allowReplies);
       setValue('scheduledFor', editPost.scheduledFor);
       setMedia(editPost.media);
+    } else if (!editPost && prefilledScheduledDate && open) {
+      // Pre-fill scheduled date for new posts created from calendar
+      setValue('scheduledFor', prefilledScheduledDate);
     } else if (!open) {
       reset();
       setMedia([]);
       setTopicInput('');
     }
-  }, [editPost, open, setValue, reset]);
+  }, [editPost, prefilledScheduledDate, open, setValue, reset]);
 
   const addTopic = () => {
     const topic = topicInput.trim().replace(/^#/, '');
