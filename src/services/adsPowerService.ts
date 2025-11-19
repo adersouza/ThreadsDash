@@ -195,7 +195,16 @@ export async function postToThreadsViaAdsPower(
 
     // Import Playwright dynamically (only available in Node.js)
     // This will fail in browser - needs to be called from backend
-    const playwright = await import('playwright-core');
+    let playwright: any;
+    try {
+      playwright = await import('playwright-core');
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Browser automation requires a Node.js server environment. Please use the API posting method or set up a separate posting server.',
+        timestamp: new Date(),
+      };
+    }
 
     // Connect to browser via CDP
     browser = await playwright.chromium.connectOverCDP(startResult.wsEndpoint);
