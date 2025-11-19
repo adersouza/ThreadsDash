@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { AccountCard } from '@/components/dashboard/AccountCard';
 import { PostComposer } from '@/components/posts/PostComposer';
+import { AccountModal } from '@/components/dashboard/AccountModal';
 import { Plus, Loader2, FileText, Calendar, Edit } from 'lucide-react';
 
 export const Dashboard = () => {
@@ -16,6 +17,7 @@ export const Dashboard = () => {
   const { isInitialized } = useAccounts();
   usePosts();
   const [composerOpen, setComposerOpen] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
 
   // Calculate post stats
   const today = new Date();
@@ -65,7 +67,7 @@ export const Dashboard = () => {
             Manage and monitor your Threads accounts
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setAccountModalOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add Account
         </Button>
@@ -144,7 +146,7 @@ export const Dashboard = () => {
                 Connect your Threads account to start managing your content,
                 tracking analytics, and scheduling posts.
               </p>
-              <Button>
+              <Button onClick={() => setAccountModalOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Connect Your First Account
               </Button>
@@ -162,8 +164,9 @@ export const Dashboard = () => {
         <Plus className="h-6 w-6" />
       </Button>
 
-      {/* Post Composer Modal */}
+      {/* Modals */}
       <PostComposer open={composerOpen} onOpenChange={setComposerOpen} />
+      <AccountModal open={accountModalOpen} onOpenChange={setAccountModalOpen} />
     </div>
   );
 };
