@@ -97,6 +97,71 @@ class RateLimiter {
 }
 
 /**
+ * Upload media to Threads
+ */
+async function uploadMedia(
+  token: string,
+  mediaUrl: string,
+  mediaType: 'image' | 'video'
+): Promise<{ success: boolean; uploadId?: string; error?: string }> {
+  try {
+    // Fetch the media file
+    const mediaResponse = await fetch(mediaUrl);
+    if (!mediaResponse.ok) {
+      return { success: false, error: 'Failed to fetch media file' };
+    }
+
+    const mediaBlob = await mediaResponse.blob();
+    const contentType = mediaBlob.type || (mediaType === 'image' ? 'image/jpeg' : 'video/mp4');
+
+    // Generate upload ID (timestamp)
+    const uploadId = Date.now().toString();
+    const entityName = `fb_uploader_${uploadId}`;
+
+    // Upload the media
+    const uploadResponse = await fetch(
+      `https://www.threads.com/rupload_igphoto/${entityName}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer IGT:2:${token}`,
+          'X-IG-App-ID': '238260118697367',
+          'X-Entity-Type': contentType,
+          'X-Entity-Name': entityName,
+          'X-Entity-Length': mediaBlob.size.toString(),
+          'Content-Type': contentType,
+          'Offset': '0',
+          'X-Instagram-Rupload-Params': JSON.stringify({
+            is_sidecar: '0',
+            is_threads: '1',
+            media_type: mediaType === 'image' ? 1 : 2,
+            upload_id: uploadId,
+          }),
+        },
+        body: mediaBlob,
+      }
+    );
+
+    const uploadData = await uploadResponse.json();
+
+    if (uploadData.status === 'ok') {
+      return { success: true, uploadId };
+    }
+
+    return {
+      success: false,
+      error: uploadData.message || 'Failed to upload media',
+    };
+  } catch (error: any) {
+    console.error('Media upload error:', error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error during media upload',
+    };
+  }
+}
+
+/**
  * Login to Instagram and get session token
  */
 export async function loginToInstagram(
@@ -182,23 +247,66 @@ export async function postToThreadsUnofficial(
       throw new Error('Instagram user ID not found for account');
     }
 
-    // Prepare post data
-    const postData: Record<string, string> = {
-      text_post_app_info: JSON.stringify({
-        reply_control: post.settings.whoCanReply === 'everyone' ? 0 :
-                       post.settings.whoCanReply === 'followers' ? 1 : 2,
-      }),
-      caption: post.content,
-      source_type: '4',
-    };
+    const hasMedia = post.media && post.media.length > 0;
 
-    // Add topics/hashtags
-    if (post.topics && post.topics.length > 0) {
-      postData.caption += '\n\n' + post.topics.map(t => `#${t}`).join(' ');
+    // Upload media if present (only first media item for now)
+    let uploadId: string | undefined;
+    if (hasMedia) {
+      const firstMedia = post.media[0];
+      const mediaType = firstMedia.type || 'image';
+
+      const uploadResult = await uploadMedia(token, firstMedia.url, mediaType);
+      if (!uploadResult.success) {
+        return {
+          success: false,
+          error: `Media upload failed: ${uploadResult.error}`,
+          timestamp: new Date(),
+        };
+      }
+      uploadId = uploadResult.uploadId;
     }
 
+    // Prepare caption
+    let caption = post.content;
+    if (post.topics && post.topics.length > 0) {
+      caption += '\n\n' + post.topics.map(t => `#${t}`).join(' ');
+    }
+
+    // Prepare text_post_app_info
+    const textPostAppInfo = {
+      reply_control: post.settings.whoCanReply === 'everyone' ? 0 :
+                     post.settings.whoCanReply === 'followers' ? 1 : 2,
+      entry_point: 'sidebar_navigation',
+      excluded_inline_media_ids: '[]',
+      fediverse_composer_enabled: true,
+      is_reply_approval_enabled: false,
+      is_spoiler_media: false,
+      text_with_entities: {
+        entities: [],
+        text: post.content,
+      },
+    };
+
+    // Prepare post data
+    const postData: Record<string, string> = {
+      caption,
+      text_post_app_info: JSON.stringify(textPostAppInfo),
+      is_threads: 'true',
+      audience: 'default',
+    };
+
+    // Add upload_id if media was uploaded
+    if (uploadId) {
+      postData.upload_id = uploadId;
+    }
+
+    // Choose endpoint based on media presence
+    const endpoint = hasMedia
+      ? 'https://www.threads.com/api/v1/media/configure_text_post_app_feed/'
+      : 'https://www.threads.com/api/v1/media/configure_text_only_post/';
+
     // Make API request to Threads web endpoint
-    const response = await fetch('https://www.threads.com/api/v1/media/configure_text_only_post/', {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',

@@ -83,6 +83,72 @@ function decrypt(encrypted: string): string {
 }
 
 /**
+ * Upload media to Threads
+ */
+async function uploadMedia(
+  token: string,
+  mediaUrl: string,
+  mediaType: 'image' | 'video'
+): Promise<{ success: boolean; uploadId?: string; error?: string }> {
+  try {
+    // Fetch the media file
+    const mediaResponse = await fetch(mediaUrl);
+    if (!mediaResponse.ok) {
+      return { success: false, error: 'Failed to fetch media file' };
+    }
+
+    const mediaBuffer = await mediaResponse.arrayBuffer();
+    const contentType = mediaResponse.headers.get('content-type') ||
+                       (mediaType === 'image' ? 'image/jpeg' : 'video/mp4');
+
+    // Generate upload ID (timestamp)
+    const uploadId = Date.now().toString();
+    const entityName = `fb_uploader_${uploadId}`;
+
+    // Upload the media
+    const uploadResponse = await fetch(
+      `https://www.threads.com/rupload_igphoto/${entityName}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer IGT:2:${token}`,
+          'X-IG-App-ID': '238260118697367',
+          'X-Entity-Type': contentType,
+          'X-Entity-Name': entityName,
+          'X-Entity-Length': mediaBuffer.byteLength.toString(),
+          'Content-Type': contentType,
+          'Offset': '0',
+          'X-Instagram-Rupload-Params': JSON.stringify({
+            is_sidecar: '0',
+            is_threads: '1',
+            media_type: mediaType === 'image' ? 1 : 2,
+            upload_id: uploadId,
+          }),
+        },
+        body: mediaBuffer,
+      }
+    );
+
+    const uploadData = await uploadResponse.json();
+
+    if (uploadData.status === 'ok') {
+      return { success: true, uploadId };
+    }
+
+    return {
+      success: false,
+      error: uploadData.message || 'Failed to upload media',
+    };
+  } catch (error: any) {
+    console.error('Media upload error:', error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error during media upload',
+    };
+  }
+}
+
+/**
  * Post to Threads using unofficial API
  */
 export async function postToThreadsApi(
@@ -105,24 +171,66 @@ export async function postToThreadsApi(
 
   try {
     const token = decrypt(instagramToken);
+    const hasMedia = postData.media && postData.media.length > 0;
+
+    // Upload media if present (only first media item for now)
+    let uploadId: string | undefined;
+    if (hasMedia && postData.media) {
+      const firstMedia = postData.media[0];
+      const mediaType = firstMedia.type || 'image';
+
+      const uploadResult = await uploadMedia(token, firstMedia.url, mediaType);
+      if (!uploadResult.success) {
+        return {
+          success: false,
+          error: `Media upload failed: ${uploadResult.error}`,
+          timestamp: new Date(),
+        };
+      }
+      uploadId = uploadResult.uploadId;
+    }
+
+    // Prepare caption
+    let caption = postData.content;
+    if (postData.topics && postData.topics.length > 0) {
+      caption += '\n\n' + postData.topics.map(t => `#${t}`).join(' ');
+    }
+
+    // Prepare text_post_app_info
+    const textPostAppInfo = {
+      reply_control: postData.settings.whoCanReply === 'everyone' ? 0 :
+                     postData.settings.whoCanReply === 'followers' ? 1 : 2,
+      entry_point: 'sidebar_navigation',
+      excluded_inline_media_ids: '[]',
+      fediverse_composer_enabled: true,
+      is_reply_approval_enabled: false,
+      is_spoiler_media: false,
+      text_with_entities: {
+        entities: [],
+        text: postData.content,
+      },
+    };
 
     // Prepare post data
     const apiData: Record<string, string> = {
-      text_post_app_info: JSON.stringify({
-        reply_control: postData.settings.whoCanReply === 'everyone' ? 0 :
-                       postData.settings.whoCanReply === 'followers' ? 1 : 2,
-      }),
-      caption: postData.content,
-      source_type: '4',
+      caption,
+      text_post_app_info: JSON.stringify(textPostAppInfo),
+      is_threads: 'true',
+      audience: 'default',
     };
 
-    // Add topics/hashtags
-    if (postData.topics && postData.topics.length > 0) {
-      apiData.caption += '\n\n' + postData.topics.map(t => `#${t}`).join(' ');
+    // Add upload_id if media was uploaded
+    if (uploadId) {
+      apiData.upload_id = uploadId;
     }
 
+    // Choose endpoint based on media presence
+    const endpoint = hasMedia
+      ? 'https://www.threads.com/api/v1/media/configure_text_post_app_feed/'
+      : 'https://www.threads.com/api/v1/media/configure_text_only_post/';
+
     // Make API request to Threads web endpoint
-    const response = await fetch('https://www.threads.com/api/v1/media/configure_text_only_post/', {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
