@@ -4,7 +4,6 @@
  * Main entry point for all Firebase Cloud Functions
  */
 
-import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 
 // Initialize Firebase Admin

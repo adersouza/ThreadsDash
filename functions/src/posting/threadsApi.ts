@@ -83,15 +83,6 @@ function decrypt(encrypted: string): string {
 }
 
 /**
- * Generate device ID for Instagram API
- */
-function generateDeviceId(): string {
-  return 'android-' + Array.from({ length: 16 }, () =>
-    Math.floor(Math.random() * 16).toString(16)
-  ).join('');
-}
-
-/**
  * Post to Threads using unofficial API
  */
 export async function postToThreadsApi(

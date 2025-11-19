@@ -88,7 +88,6 @@ async function canPostSafely(
   }
 
   // Check hourly limit
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
   const postsLastHour = account.postsLastHour || 0;
 
   if (postsLastHour >= RATE_LIMITS.MAX_PER_HOUR) {
