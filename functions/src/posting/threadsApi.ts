@@ -121,15 +121,14 @@ export async function postToThreadsApi(
       apiData.caption += '\n\n' + postData.topics.map(t => `#${t}`).join(' ');
     }
 
-    // Make API request
-    const response = await fetch('https://i.instagram.com/api/v1/media/configure_text_only_post/', {
+    // Make API request to Threads web endpoint
+    const response = await fetch('https://www.threads.com/api/v1/media/configure_text_only_post/', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
         'Authorization': `Bearer IGT:2:${token}`,
-        'User-Agent': 'Barcelona 289.0.0.77.109 Android (24/7.0; 640dpi; 1440x2560; samsung; SM-G930F; herolte; samsungexynos8890; en_US; 489705618)',
-        'X-IG-App-ID': '567067343352427',
-        'X-FB-HTTP-Engine': 'Liger',
+        'X-IG-App-ID': '238260118697367',
+        'X-ASBD-ID': '359341',
       },
       body: new URLSearchParams(apiData).toString(),
     });
