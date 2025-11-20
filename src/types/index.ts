@@ -36,6 +36,11 @@ export interface ThreadsAccount {
   postsLastHour?: number; // Number of posts in the last hour
   postsToday?: number; // Number of posts today
   rateLimitResetAt?: Date; // When rate limits reset
+
+  // Analytics Baseline (captured when account is first added)
+  baselineFollowersCount?: number; // Initial follower count when account was added
+  baselineFollowingCount?: number; // Initial following count when account was added
+  baselinePostsCount?: number; // Initial posts count when account was added
 }
 
 // Post Types

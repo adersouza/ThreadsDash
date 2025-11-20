@@ -7,14 +7,21 @@ import type {
 
 /**
  * Generate mock daily analytics data for testing
+ * @param accountId - The account ID
+ * @param days - Number of days to generate data for
+ * @param baselineFollowers - Starting follower count (defaults to random if not provided)
  */
 export function generateMockDailyAnalytics(
   accountId: string,
-  days: number = 30
+  days: number = 30,
+  baselineFollowers?: number
 ): DailyAnalytics[] {
   const analytics: DailyAnalytics[] = [];
   const today = new Date();
-  let currentFollowers = 1000 + Math.floor(Math.random() * 5000);
+  // Use baseline if provided, otherwise use random starting value
+  let currentFollowers = baselineFollowers !== undefined
+    ? baselineFollowers
+    : 1000 + Math.floor(Math.random() * 5000);
 
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date(today);
@@ -144,9 +151,10 @@ export function generateMockOptimalTimes(): OptimalTimeSlot[] {
 export function generateMockAnalyticsSummary(
   accountId: string,
   accountName: string,
-  days: number = 30
+  days: number = 30,
+  baselineFollowers?: number
 ): AnalyticsSummary {
-  const analytics = generateMockDailyAnalytics(accountId, days);
+  const analytics = generateMockDailyAnalytics(accountId, days, baselineFollowers);
   const firstDay = analytics[0];
   const lastDay = analytics[analytics.length - 1];
 

@@ -55,10 +55,14 @@ export const Analytics = () => {
   const selectedAccount = accounts.find((acc) => acc.id === selectedAccountId);
   const analyticsData = useMemo(
     () =>
-      selectedAccountId
-        ? generateMockDailyAnalytics(selectedAccountId, days)
+      selectedAccountId && selectedAccount
+        ? generateMockDailyAnalytics(
+            selectedAccountId,
+            days,
+            selectedAccount.baselineFollowersCount || selectedAccount.followersCount || 0
+          )
         : [],
-    [selectedAccountId, days]
+    [selectedAccountId, selectedAccount, days]
   );
 
   const topPosts = useMemo(
@@ -79,7 +83,8 @@ export const Analytics = () => {
     return generateMockAnalyticsSummary(
       selectedAccount.id,
       selectedAccount.username,
-      days
+      days,
+      selectedAccount.baselineFollowersCount || selectedAccount.followersCount || 0
     );
   }, [selectedAccount, days]);
 
