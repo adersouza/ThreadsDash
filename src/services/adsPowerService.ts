@@ -197,7 +197,9 @@ export async function postToThreadsViaAdsPower(
     // This will fail in browser - needs to be called from backend
     let playwright: any;
     try {
-      playwright = await import('playwright-core');
+      // @ts-ignore - playwright-core is only available in Node.js environment
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      playwright = await import(/* @vite-ignore */ 'playwright-core');
     } catch (error) {
       return {
         success: false,
