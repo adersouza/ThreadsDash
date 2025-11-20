@@ -311,14 +311,14 @@ export const PostComposer = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+      <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle>
             {editPost ? 'Edit Post' : 'Create New Post'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col lg:flex-row overflow-hidden">
+        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
           {/* Form Section */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -568,7 +568,7 @@ export const PostComposer = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t bg-muted/10 flex items-center justify-between">
+        <div className="px-6 py-4 border-t bg-muted/10 flex items-center justify-between flex-shrink-0">
           <Button
             type="button"
             variant="ghost"
