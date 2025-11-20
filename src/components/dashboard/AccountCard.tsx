@@ -6,7 +6,7 @@ import { Users, TrendingUp, Trash2 } from 'lucide-react';
 import type { ThreadsAccount } from '@/types';
 import { useAccountStore } from '@/store/accountStore';
 import { cn } from '@/lib/utils';
-import { db } from '@/lib/firebase';
+import { db } from '@/services/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState } from 'react';
