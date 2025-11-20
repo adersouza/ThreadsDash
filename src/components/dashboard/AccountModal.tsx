@@ -39,6 +39,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
     instagramUserId: '',
     instagramUsername: '',
     instagramPassword: '',
+    twoFactorSecret: '',
     baselineFollowers: '',
     baselineFollowing: '',
     baselinePosts: '',
@@ -77,10 +78,11 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
           return;
         }
 
-        // Login to get token
+        // Login to get token (with optional 2FA secret)
         const loginResult = await loginToInstagram(
           formData.instagramUsername,
-          formData.instagramPassword
+          formData.instagramPassword,
+          formData.twoFactorSecret || undefined
         );
 
         if (!loginResult.success || !loginResult.token || !loginResult.userId) {
@@ -114,13 +116,19 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
       // Encrypt Instagram token
       const encryptedToken = await encrypt(instagramToken);
 
+      // Encrypt 2FA secret if provided
+      let encrypted2FASecret = null;
+      if (formData.twoFactorSecret) {
+        encrypted2FASecret = await encrypt(formData.twoFactorSecret);
+      }
+
       // Parse baseline values (default to 0 if not provided)
       const baselineFollowers = formData.baselineFollowers ? parseInt(formData.baselineFollowers) : 0;
       const baselineFollowing = formData.baselineFollowing ? parseInt(formData.baselineFollowing) : 0;
       const baselinePosts = formData.baselinePosts ? parseInt(formData.baselinePosts) : 0;
 
       // Create account in Firestore
-      await addDoc(collection(db, 'users', currentUser.uid, 'accounts'), {
+      const accountData: any = {
         username: formData.username.replace('@', ''), // Remove @ if present
         displayName: formData.displayName,
         bio: formData.bio,
@@ -138,7 +146,14 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         postsCount: baselinePosts,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      // Add 2FA secret if provided
+      if (encrypted2FASecret) {
+        accountData.twoFactorSecret = encrypted2FASecret;
+      }
+
+      await addDoc(collection(db, 'users', currentUser.uid, 'accounts'), accountData);
 
       toast({
         title: 'Account added',
@@ -154,6 +169,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         instagramUserId: '',
         instagramUsername: '',
         instagramPassword: '',
+        twoFactorSecret: '',
         baselineFollowers: '',
         baselineFollowing: '',
         baselinePosts: '',
@@ -367,10 +383,24 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
                           Used once to get your token, then discarded
                         </p>
                       </div>
-                      <Alert variant="destructive">
+                      <div className="grid gap-2">
+                        <Label htmlFor="twoFactorSecret">2FA Secret (Optional)</Label>
+                        <Input
+                          id="twoFactorSecret"
+                          type="password"
+                          placeholder="JBSWY3DPEHPK3PXP (your TOTP secret)"
+                          value={formData.twoFactorSecret}
+                          onChange={(e) => setFormData({ ...formData, twoFactorSecret: e.target.value })}
+                          disabled={loading}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          If 2FA is enabled, paste your TOTP secret key here. We'll auto-generate codes.
+                        </p>
+                      </div>
+                      <Alert>
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription className="text-xs">
-                          <strong>Note:</strong> Won't work with 2FA enabled. May fail if Instagram detects automation.
+                          <strong>2FA Support:</strong> If you have 2FA enabled, provide your secret key above. Without it, login will fail. The secret is the code shown when setting up authenticator apps.
                         </AlertDescription>
                       </Alert>
                     </div>

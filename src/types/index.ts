@@ -29,6 +29,7 @@ export interface ThreadsAccount {
   postingMethod: 'browser' | 'api'; // Choose between browser automation or API
   instagramToken?: string; // Encrypted Instagram token for unofficial API method
   instagramUserId?: string; // Instagram user ID
+  twoFactorSecret?: string; // Encrypted 2FA secret for automatic TOTP code generation
   adsPowerProfileId?: string; // AdsPower profile ID for browser automation
   lastPostAt?: Date; // Last time a post was published (for rate limiting)
 

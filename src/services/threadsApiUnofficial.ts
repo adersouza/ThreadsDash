@@ -13,12 +13,18 @@
 import type { ThreadsAccount, PostingResult } from '@/types';
 import type { Post } from '@/types/post';
 import { decryptSync } from './encryption';
+import { authenticator } from 'otplib';
 
 interface InstagramLoginResponse {
   logged_in_user?: {
     pk: string;
     username: string;
     full_name: string;
+  };
+  two_factor_required?: boolean;
+  two_factor_info?: {
+    username: string;
+    two_factor_identifier: string;
   };
   status?: string;
   message?: string;
@@ -163,16 +169,19 @@ async function uploadMedia(
 
 /**
  * Login to Instagram and get session token
+ * Supports 2FA if twoFactorSecret is provided
  */
 export async function loginToInstagram(
   username: string,
-  password: string
+  password: string,
+  twoFactorSecret?: string
 ): Promise<{ success: boolean; token?: string; userId?: string; error?: string }> {
   try {
     // Generate device UUID
     const deviceId = generateDeviceId();
 
-    const response = await fetch('https://i.instagram.com/api/v1/accounts/login/', {
+    // Step 1: Initial login attempt
+    const loginResponse = await fetch('https://i.instagram.com/api/v1/accounts/login/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -188,23 +197,72 @@ export async function loginToInstagram(
       }).toString(),
     });
 
-    const data: InstagramLoginResponse = await response.json();
+    const loginData: InstagramLoginResponse = await loginResponse.json();
 
-    if (data.logged_in_user) {
-      // Extract session token from cookies
-      const cookies = response.headers.get('set-cookie');
+    // Check if login succeeded without 2FA
+    if (loginData.logged_in_user) {
+      const cookies = loginResponse.headers.get('set-cookie');
       const sessionToken = extractSessionToken(cookies);
 
       return {
         success: true,
         token: sessionToken,
-        userId: data.logged_in_user.pk,
+        userId: loginData.logged_in_user.pk,
+      };
+    }
+
+    // Step 2: Handle 2FA if required
+    if (loginData.two_factor_required) {
+      if (!twoFactorSecret) {
+        return {
+          success: false,
+          error: '2FA code required but no 2FA secret provided. Please add your 2FA secret when setting up the account.',
+        };
+      }
+
+      // Generate TOTP code from secret
+      const twoFactorCode = authenticator.generate(twoFactorSecret);
+
+      // Submit 2FA code
+      const twoFactorResponse = await fetch('https://i.instagram.com/api/v1/accounts/two_factor_login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Barcelona 289.0.0.77.109 Android (24/7.0; 640dpi; 1440x2560; samsung; SM-G930F; herolte; samsungexynos8890; en_US; 489705618)',
+          'X-IG-App-ID': '567067343352427',
+          'X-IG-Device-ID': deviceId,
+        },
+        body: new URLSearchParams({
+          username,
+          verification_code: twoFactorCode,
+          two_factor_identifier: loginData.two_factor_info?.two_factor_identifier || '',
+          device_id: deviceId,
+          trust_this_device: '0',
+        }).toString(),
+      });
+
+      const twoFactorData: InstagramLoginResponse = await twoFactorResponse.json();
+
+      if (twoFactorData.logged_in_user) {
+        const cookies = twoFactorResponse.headers.get('set-cookie');
+        const sessionToken = extractSessionToken(cookies);
+
+        return {
+          success: true,
+          token: sessionToken,
+          userId: twoFactorData.logged_in_user.pk,
+        };
+      }
+
+      return {
+        success: false,
+        error: twoFactorData.message || '2FA verification failed',
       };
     }
 
     return {
       success: false,
-      error: data.message || 'Login failed',
+      error: loginData.message || 'Login failed',
     };
   } catch (error) {
     console.error('Instagram login error:', error);
