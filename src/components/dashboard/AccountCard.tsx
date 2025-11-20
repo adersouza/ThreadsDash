@@ -1,10 +1,15 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Users, TrendingUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Users, TrendingUp, Trash2 } from 'lucide-react';
 import type { ThreadsAccount } from '@/types';
 import { useAccountStore } from '@/store/accountStore';
 import { cn } from '@/lib/utils';
+import { db } from '@/lib/firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { useAuth } from '@/contexts/AuthContext';
+import { useState } from 'react';
 
 interface AccountCardProps {
   account: ThreadsAccount;
@@ -12,7 +17,35 @@ interface AccountCardProps {
 
 export const AccountCard = ({ account }: AccountCardProps) => {
   const { selectedAccount, setSelectedAccount } = useAccountStore();
+  const { currentUser } = useAuth();
+  const [isDeleting, setIsDeleting] = useState(false);
   const isSelected = selectedAccount?.id === account.id;
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card selection when clicking delete
+
+    if (!currentUser) return;
+
+    if (!confirm(`Are you sure you want to delete @${account.username}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const accountRef = doc(db, 'users', currentUser.uid, 'accounts', account.id);
+      await deleteDoc(accountRef);
+
+      // If this was the selected account, clear the selection
+      if (isSelected) {
+        setSelectedAccount(null);
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      alert('Failed to delete account. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Calculate engagement rate (simplified for now)
   const engagementRate = account.followersCount > 0
@@ -96,9 +129,20 @@ export const AccountCard = ({ account }: AccountCardProps) => {
               <p className="text-xs text-muted-foreground">{account.displayName}</p>
             </div>
           </div>
-          <Badge variant={getStatusColor(account.status)}>
-            {getStatusLabel(account.status)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={getStatusColor(account.status)}>
+              {getStatusLabel(account.status)}
+            </Badge>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
