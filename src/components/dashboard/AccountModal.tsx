@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
 import { collection, addDoc, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { encrypt } from '@/services/encryption';
-import { loginToInstagram } from '@/services/threadsApiUnofficial';
+import { loginToInstagram, getAccountInfo } from '@/services/threadsApiUnofficial';
 import {
   Dialog,
   DialogContent,
@@ -40,9 +40,6 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
     instagramUsername: '',
     instagramPassword: '',
     twoFactorSecret: '',
-    baselineFollowers: '',
-    baselineFollowing: '',
-    baselinePosts: '',
   });
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
@@ -113,6 +110,22 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         instagramUserId = formData.instagramUserId;
       }
 
+      // Fetch account stats to use as baseline
+      const accountInfo = await getAccountInfo(instagramToken, instagramUserId);
+
+      let baselineFollowers = 0;
+      let baselineFollowing = 0;
+      let baselinePosts = 0;
+
+      if (accountInfo.success) {
+        baselineFollowers = accountInfo.followers || 0;
+        baselineFollowing = accountInfo.following || 0;
+        baselinePosts = accountInfo.posts || 0;
+      } else {
+        console.warn('Failed to fetch account info for baseline:', accountInfo.error);
+        // Continue anyway with 0 baseline
+      }
+
       // Encrypt Instagram token
       const encryptedToken = await encrypt(instagramToken);
 
@@ -121,11 +134,6 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
       if (formData.twoFactorSecret) {
         encrypted2FASecret = await encrypt(formData.twoFactorSecret);
       }
-
-      // Parse baseline values (default to 0 if not provided)
-      const baselineFollowers = formData.baselineFollowers ? parseInt(formData.baselineFollowers) : 0;
-      const baselineFollowing = formData.baselineFollowing ? parseInt(formData.baselineFollowing) : 0;
-      const baselinePosts = formData.baselinePosts ? parseInt(formData.baselinePosts) : 0;
 
       // Create account in Firestore
       const accountData: any = {
@@ -170,9 +178,6 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         instagramUsername: '',
         instagramPassword: '',
         twoFactorSecret: '',
-        baselineFollowers: '',
-        baselineFollowing: '',
-        baselinePosts: '',
       });
       setCredentialMethod('auto');
       onOpenChange(false);
@@ -457,53 +462,13 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
                   />
                 </div>
 
-                {/* Analytics Baseline */}
-                <div className="border-t pt-4 space-y-3">
-                  <div>
-                    <Label className="text-base font-semibold">Analytics Baseline (Optional)</Label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Enter current metrics to track growth from this point. Leave empty to start from 0.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="grid gap-2">
-                      <Label htmlFor="baselineFollowers">Followers</Label>
-                      <Input
-                        id="baselineFollowers"
-                        type="number"
-                        placeholder="800"
-                        value={formData.baselineFollowers}
-                        onChange={(e) => setFormData({ ...formData, baselineFollowers: e.target.value })}
-                        disabled={loading}
-                        min="0"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="baselineFollowing">Following</Label>
-                      <Input
-                        id="baselineFollowing"
-                        type="number"
-                        placeholder="100"
-                        value={formData.baselineFollowing}
-                        onChange={(e) => setFormData({ ...formData, baselineFollowing: e.target.value })}
-                        disabled={loading}
-                        min="0"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="baselinePosts">Posts</Label>
-                      <Input
-                        id="baselinePosts"
-                        type="number"
-                        placeholder="50"
-                        value={formData.baselinePosts}
-                        onChange={(e) => setFormData({ ...formData, baselinePosts: e.target.value })}
-                        disabled={loading}
-                        min="0"
-                      />
-                    </div>
-                  </div>
-                </div>
+                {/* Analytics Info */}
+                <Alert className="border-t">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <strong>Analytics Tracking:</strong> We'll automatically fetch your current follower count, following, and posts when you add this account. Analytics will track growth from this baseline.
+                  </AlertDescription>
+                </Alert>
               </div>
               <DialogFooter>
                 <Button

@@ -168,6 +168,53 @@ async function uploadMedia(
 }
 
 /**
+ * Fetch Instagram/Threads account info
+ */
+export async function getAccountInfo(
+  token: string,
+  userId: string
+): Promise<{
+  success: boolean;
+  followers?: number;
+  following?: number;
+  posts?: number;
+  error?: string;
+}> {
+  try {
+    const response = await fetch(`https://i.instagram.com/api/v1/users/${userId}/info/`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer IGT:2:${token}`,
+        'User-Agent': 'Barcelona 289.0.0.77.109 Android (24/7.0; 640dpi; 1440x2560; samsung; SM-G930F; herolte; samsungexynos8890; en_US; 489705618)',
+        'X-IG-App-ID': '567067343352427',
+      },
+    });
+
+    const data = await response.json();
+
+    if (data.status === 'ok' && data.user) {
+      return {
+        success: true,
+        followers: data.user.follower_count || 0,
+        following: data.user.following_count || 0,
+        posts: data.user.media_count || 0,
+      };
+    }
+
+    return {
+      success: false,
+      error: data.message || 'Failed to fetch account info',
+    };
+  } catch (error) {
+    console.error('Error fetching account info:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
  * Login to Instagram and get session token
  * Supports 2FA if twoFactorSecret is provided
  */
