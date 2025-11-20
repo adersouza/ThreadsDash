@@ -11,3 +11,4 @@ admin.initializeApp();
 
 // Export all functions
 export { processScheduledPosts, publishPostNow } from './scheduledPosts';
+export { instagramLogin } from './instagramAuth';

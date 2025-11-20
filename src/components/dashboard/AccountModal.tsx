@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
 import { collection, addDoc, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { encrypt } from '@/services/encryption';
-import { loginToInstagram, getAccountInfo } from '@/services/threadsApiUnofficial';
 import {
   Dialog,
   DialogContent,
@@ -62,9 +62,13 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
       let instagramToken = '';
       let instagramUserId = '';
 
+      let baselineFollowers = 0;
+      let baselineFollowing = 0;
+      let baselinePosts = 0;
+
       // Get credentials based on method
       if (credentialMethod === 'auto') {
-        // Automated login with username/password
+        // Automated login with username/password via Cloud Function
         if (!formData.instagramUsername || !formData.instagramPassword) {
           toast({
             title: 'Missing credentials',
@@ -75,27 +79,49 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
           return;
         }
 
-        // Login to get token (with optional 2FA secret)
-        const loginResult = await loginToInstagram(
-          formData.instagramUsername,
-          formData.instagramPassword,
-          formData.twoFactorSecret || undefined
-        );
+        // Call Cloud Function to login (server-side, no CORS issues)
+        const functions = getFunctions();
+        const instagramLoginFn = httpsCallable(functions, 'instagramLogin');
 
-        if (!loginResult.success || !loginResult.token || !loginResult.userId) {
+        try {
+          const result = await instagramLoginFn({
+            username: formData.instagramUsername,
+            password: formData.instagramPassword,
+            twoFactorSecret: formData.twoFactorSecret || undefined,
+          });
+
+          const data = result.data as any;
+
+          if (!data.success || !data.token || !data.userId) {
+            toast({
+              title: 'Login failed',
+              description: 'Could not authenticate with Instagram',
+              variant: 'destructive',
+            });
+            setLoading(false);
+            return;
+          }
+
+          instagramToken = data.token;
+          instagramUserId = data.userId;
+
+          // Account stats returned from Cloud Function
+          baselineFollowers = data.followers || 0;
+          baselineFollowing = data.following || 0;
+          baselinePosts = data.posts || 0;
+
+        } catch (error: any) {
+          console.error('Instagram login error:', error);
           toast({
             title: 'Login failed',
-            description: loginResult.error || 'Could not authenticate with Instagram',
+            description: error.message || 'Could not authenticate with Instagram',
             variant: 'destructive',
           });
           setLoading(false);
           return;
         }
-
-        instagramToken = loginResult.token;
-        instagramUserId = loginResult.userId;
       } else {
-        // Manual token entry
+        // Manual token entry - baseline defaults to 0
         if (!formData.instagramToken || !formData.instagramUserId) {
           toast({
             title: 'Missing credentials',
@@ -108,22 +134,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
 
         instagramToken = formData.instagramToken;
         instagramUserId = formData.instagramUserId;
-      }
-
-      // Fetch account stats to use as baseline
-      const accountInfo = await getAccountInfo(instagramToken, instagramUserId);
-
-      let baselineFollowers = 0;
-      let baselineFollowing = 0;
-      let baselinePosts = 0;
-
-      if (accountInfo.success) {
-        baselineFollowers = accountInfo.followers || 0;
-        baselineFollowing = accountInfo.following || 0;
-        baselinePosts = accountInfo.posts || 0;
-      } else {
-        console.warn('Failed to fetch account info for baseline:', accountInfo.error);
-        // Continue anyway with 0 baseline
+        // Baseline stays at 0 for manual entry
       }
 
       // Encrypt Instagram token
