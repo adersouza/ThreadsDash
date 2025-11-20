@@ -103,7 +103,16 @@ export const PostingMethodSettings = ({ account, onUpdate }: PostingMethodSettin
           setAdsPowerStatus('disconnected');
         }
       } else if (postingMethod === 'api') {
-        // Test Instagram login
+        // Check if credentials already configured
+        if (account.instagramToken && account.instagramUserId) {
+          toast({
+            title: 'Credentials configured',
+            description: 'Instagram token and user ID are already set up for this account',
+          });
+          return;
+        }
+
+        // Test Instagram login with username/password
         if (!instagramUsername || !instagramPassword) {
           toast({
             title: 'Missing credentials',
@@ -160,32 +169,39 @@ export const PostingMethodSettings = ({ account, onUpdate }: PostingMethodSettin
         }
         updates.adsPowerProfileId = selectedProfileId;
       } else if (postingMethod === 'api') {
-        if (!instagramUsername || !instagramPassword) {
-          toast({
-            title: 'Credentials required',
-            description: 'Please enter Instagram credentials',
-            variant: 'destructive',
-          });
-          setIsSaving(false);
-          return;
-        }
+        // Check if credentials already exist from account setup
+        if (account.instagramToken && account.instagramUserId) {
+          // Credentials already configured, just update posting method
+          // No need to do anything else - token already stored
+        } else {
+          // No credentials yet, need to login with username/password
+          if (!instagramUsername || !instagramPassword) {
+            toast({
+              title: 'Credentials required',
+              description: 'Please enter Instagram credentials or add them when adding the account',
+              variant: 'destructive',
+            });
+            setIsSaving(false);
+            return;
+          }
 
-        // Login to get token
-        const loginResult = await loginToInstagram(instagramUsername, instagramPassword);
-        if (!loginResult.success || !loginResult.token || !loginResult.userId) {
-          toast({
-            title: 'Login failed',
-            description: loginResult.error || 'Could not authenticate',
-            variant: 'destructive',
-          });
-          setIsSaving(false);
-          return;
-        }
+          // Login to get token
+          const loginResult = await loginToInstagram(instagramUsername, instagramPassword);
+          if (!loginResult.success || !loginResult.token || !loginResult.userId) {
+            toast({
+              title: 'Login failed',
+              description: loginResult.error || 'Could not authenticate',
+              variant: 'destructive',
+            });
+            setIsSaving(false);
+            return;
+          }
 
-        // Encrypt and save token
-        const encryptedToken = encryptSync(loginResult.token);
-        updates.instagramToken = encryptedToken;
-        updates.instagramUserId = loginResult.userId;
+          // Encrypt and save token
+          const encryptedToken = encryptSync(loginResult.token);
+          updates.instagramToken = encryptedToken;
+          updates.instagramUserId = loginResult.userId;
+        }
       }
 
       // Update Firestore
@@ -369,40 +385,59 @@ export const PostingMethodSettings = ({ account, onUpdate }: PostingMethodSettin
                 </AlertDescription>
               </Alert>
 
-              <div className="space-y-2">
-                <Label htmlFor="instagram-username">Instagram Username</Label>
-                <Input
-                  id="instagram-username"
-                  type="text"
-                  placeholder="your_instagram_username"
-                  value={instagramUsername}
-                  onChange={(e) => setInstagramUsername(e.target.value)}
-                  disabled={isSaving}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="instagram-password">Instagram Password</Label>
-                <Input
-                  id="instagram-password"
-                  type="password"
-                  placeholder="Your Instagram password"
-                  value={instagramPassword}
-                  onChange={(e) => setInstagramPassword(e.target.value)}
-                  disabled={isSaving}
-                />
-                <p className="text-sm text-muted-foreground">
-                  Your password is encrypted before being stored.
-                </p>
-              </div>
-
-              {account.instagramToken && (
-                <div className="flex items-center gap-2 p-2 bg-green-500/10 border border-green-500/20 rounded">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-green-700 dark:text-green-400">
-                    Instagram credentials configured
-                  </span>
+              {account.instagramToken && account.instagramUserId ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                        Instagram credentials already configured
+                      </span>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Your Instagram token and user ID were provided when you added this account.
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    You're all set! Simply save the configuration below to use the API posting method.
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No Instagram credentials found. Please add them when adding the account, or enter them below.
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="instagram-username">Instagram Username</Label>
+                    <Input
+                      id="instagram-username"
+                      type="text"
+                      placeholder="your_instagram_username"
+                      value={instagramUsername}
+                      onChange={(e) => setInstagramUsername(e.target.value)}
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="instagram-password">Instagram Password</Label>
+                    <Input
+                      id="instagram-password"
+                      type="password"
+                      placeholder="Your Instagram password"
+                      value={instagramPassword}
+                      onChange={(e) => setInstagramPassword(e.target.value)}
+                      disabled={isSaving}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Your password is encrypted before being stored.
+                    </p>
+                  </div>
+                </>
               )}
             </div>
           )}
