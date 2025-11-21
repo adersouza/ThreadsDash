@@ -12,7 +12,7 @@
 
 import type { ThreadsAccount, PostingResult } from '@/types';
 import type { Post } from '@/types/post';
-import { decryptSync } from './encryption';
+import { decrypt } from './encryption';
 import { authenticator } from 'otplib';
 
 interface InstagramLoginResponse {
@@ -345,7 +345,7 @@ export async function postToThreadsUnofficial(
       throw new Error('Instagram token not found for account');
     }
 
-    const token = decryptSync(account.instagramToken);
+    const token = await decrypt(account.instagramToken);
     const userId = account.instagramUserId;
 
     if (!userId) {
