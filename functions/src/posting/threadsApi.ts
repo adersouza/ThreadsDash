@@ -217,10 +217,11 @@ export async function postToThreadsApi(
     }
 
     // Choose endpoint based on media presence
-    // Threads uses Instagram's API infrastructure
-    const endpoint = hasMedia
-      ? 'https://www.instagram.com/api/v1/media/configure_text_post_app_feed/'
-      : 'https://www.instagram.com/api/v1/media/configure_text_only_post/';
+    // Threads uses Instagram's text_post_app endpoints (Threads' internal codename: Barcelona)
+    const endpoint = 'https://www.instagram.com/api/v1/text_post_app_textposts/create/';
+
+    console.log('Posting to endpoint:', endpoint);
+    console.log('Post data:', JSON.stringify(apiData, null, 2));
 
     // Make API request to Instagram API (Threads backend)
     const response = await fetch(endpoint, {
