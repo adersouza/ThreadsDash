@@ -4,7 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/services/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccountStore } from '@/store/accountStore';
 import { usePostStore } from '@/store/postStore';
@@ -272,58 +273,23 @@ export const PostComposer = ({
         postId = docRef.id;
       }
 
-      // Publish post directly using the Instagram API
+      // Publish post via Cloud Function (to avoid CORS)
       if (!selectedAccount) {
         throw new Error('No account selected');
       }
 
       try {
-        // Use the selectedAccount object we already have (no need to fetch again)
-        const accountData = selectedAccount;
+        // Call the Cloud Function to publish the post
+        const publishPostFn = httpsCallable(functions, 'publishPost');
+        const result = await publishPostFn({ postId });
 
-        // Post directly to Threads
-        const { postToThreadsUnofficial } = await import('@/services/threadsApiUnofficial');
-        const postPayload: any = {
-          id: postId,
-          content: data.content,
-          media: [],
-          status: 'published',
-          scheduledFor: null,
-          topics: data.topics || [],
-          settings: {
-            whoCanReply: data.whoCanReply || 'everyone',
-            allowReplies: data.allowReplies !== false,
-          },
-        };
-
-        const result = await postToThreadsUnofficial(accountData, postPayload);
-
-        if (result.success) {
-          // Update post status to published
-          await updateDoc(doc(db, 'users', currentUser!.uid, 'posts', postId), {
-            status: 'published',
-            publishedAt: serverTimestamp(),
-          });
-
-          toast({
-            title: 'Post published!',
-            description: 'Your post has been published to Threads.',
-          });
-        } else {
-          // Update post status to failed
-          await updateDoc(doc(db, 'users', currentUser!.uid, 'posts', postId), {
-            status: 'failed',
-            error: result.error,
-          });
-
-          toast({
-            title: 'Publishing failed',
-            description: result.error || 'Failed to publish post to Threads.',
-            variant: 'destructive',
-          });
-        }
+        toast({
+          title: 'Post published!',
+          description: 'Your post has been published to Threads.',
+        });
       } catch (error: any) {
         console.error('Error publishing post:', error);
+
         // Update post status to failed
         await updateDoc(doc(db, 'users', currentUser!.uid, 'posts', postId), {
           status: 'failed',
