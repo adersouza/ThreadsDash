@@ -33,12 +33,26 @@ function generateDeviceId(): string {
 
 /**
  * Extract session token from cookies
+ * In Node.js fetch, set-cookie might return an array or a single string
  */
-function extractSessionToken(cookies: string | null): string {
-  if (!cookies) return '';
+function extractSessionToken(cookieHeader: string | string[] | null): string {
+  if (!cookieHeader) {
+    console.log('No cookie header found');
+    return '';
+  }
+
+  // Handle both single string and array of cookies
+  const cookies = Array.isArray(cookieHeader) ? cookieHeader.join('; ') : cookieHeader;
+  console.log('Extracting session from cookies:', cookies.substring(0, 100));
 
   const sessionMatch = cookies.match(/sessionid=([^;]+)/);
-  return sessionMatch ? sessionMatch[1] : '';
+  if (sessionMatch) {
+    console.log('Session token extracted successfully');
+    return sessionMatch[1];
+  }
+
+  console.log('No sessionid found in cookies');
+  return '';
 }
 
 /**
@@ -57,6 +71,8 @@ export const instagramLogin = functions.https.onCall(async (data, context) => {
   }
 
   try {
+    console.log('Starting Instagram login for user:', username);
+
     // Generate device UUID
     const deviceId = generateDeviceId();
 
@@ -77,7 +93,19 @@ export const instagramLogin = functions.https.onCall(async (data, context) => {
       }).toString(),
     });
 
+    console.log('Login response status:', loginResponse.status);
+
+    if (!loginResponse.ok) {
+      const errorText = await loginResponse.text();
+      console.error('Login failed with status:', loginResponse.status, 'Response:', errorText);
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        `Instagram API returned ${loginResponse.status}: ${errorText.substring(0, 200)}`
+      );
+    }
+
     const loginData: InstagramLoginResponse = await loginResponse.json();
+    console.log('Login data received, logged_in:', !!loginData.logged_in_user, '2FA required:', !!loginData.two_factor_required);
 
     let sessionToken = '';
     let userId = '';
@@ -138,6 +166,7 @@ export const instagramLogin = functions.https.onCall(async (data, context) => {
     }
 
     // Step 2: Fetch account info
+    console.log('Fetching account info for user ID:', userId);
     const accountInfoResponse = await fetch(`https://i.instagram.com/api/v1/users/${userId}/info/`, {
       method: 'GET',
       headers: {
@@ -146,6 +175,8 @@ export const instagramLogin = functions.https.onCall(async (data, context) => {
         'X-IG-App-ID': '567067343352427',
       },
     });
+
+    console.log('Account info response status:', accountInfoResponse.status);
 
     const accountInfoData = await accountInfoResponse.json();
 
@@ -157,9 +188,13 @@ export const instagramLogin = functions.https.onCall(async (data, context) => {
       followers = accountInfoData.user.follower_count || 0;
       following = accountInfoData.user.following_count || 0;
       posts = accountInfoData.user.media_count || 0;
+      console.log('Account stats retrieved:', { followers, following, posts });
+    } else {
+      console.warn('Failed to get account info:', accountInfoData.message || 'Unknown error');
     }
 
     // Return success with token, userId, and account stats
+    console.log('Instagram login completed successfully');
     return {
       success: true,
       token: sessionToken,
