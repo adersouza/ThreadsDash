@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
 import { collection, addDoc, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
-import { encrypt } from '@/services/encryption';
+import { encryptSync } from '@/services/encryption';
 import {
   Dialog,
   DialogContent,
@@ -63,8 +63,8 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
     try {
       setLoading(true);
 
-      // Encrypt Instagram token
-      const encryptedToken = await encrypt(formData.instagramToken);
+      // Encrypt Instagram token (using simple base64 for now)
+      const encryptedToken = encryptSync(formData.instagramToken);
 
       // Create account in Firestore
       const accountData: any = {
