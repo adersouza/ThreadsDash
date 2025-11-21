@@ -14,12 +14,13 @@ export const publishPost = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
-  const { postId } = data;
+  const { postId, postingMethod } = data;
   if (!postId) {
     throw new functions.https.HttpsError('invalid-argument', 'postId is required');
   }
 
   const userId = context.auth.uid;
+  const selectedMethod = postingMethod || 'api';
 
   try {
     // Import the posting function from threadsApi
@@ -48,7 +49,34 @@ export const publishPost = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('not-found', 'Account data not found');
     }
 
-    // Post to Threads
+    // Check posting method and validate
+    if (selectedMethod === 'browser') {
+      // Browser automation cannot run in Cloud Functions
+      await postRef.update({
+        status: 'failed',
+        error: 'Browser automation requires a separate posting server. Cloud Functions cannot run headless browsers. Please use API method or set up a dedicated posting server with AdsPower.',
+      });
+      throw new functions.https.HttpsError(
+        'unimplemented',
+        'Browser automation requires a separate posting server. Cloud Functions cannot run headless browsers. Please use API method or set up a dedicated posting server with AdsPower.'
+      );
+    }
+
+    // Validate API method credentials
+    if (selectedMethod === 'api') {
+      if (!account.instagramToken || !account.instagramUserId) {
+        await postRef.update({
+          status: 'failed',
+          error: 'Instagram credentials not configured. Please add your Instagram token in account settings.',
+        });
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          'Instagram credentials not configured. Please add your Instagram token in account settings.'
+        );
+      }
+    }
+
+    // Post to Threads via API
     const result = await postToThreadsApi(
       account.instagramToken,
       account.instagramUserId,

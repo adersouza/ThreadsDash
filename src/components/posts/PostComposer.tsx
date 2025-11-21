@@ -37,6 +37,8 @@ import {
   Save,
   X,
   Tag,
+  Chrome,
+  Zap,
 } from 'lucide-react';
 import type { MediaItem, Post, PostStatus } from '@/types/post';
 
@@ -47,6 +49,7 @@ const postSchema = z.object({
   scheduledFor: z.date().optional(),
   whoCanReply: z.enum(['everyone', 'followers', 'mentioned']),
   allowReplies: z.boolean(),
+  postingMethod: z.enum(['browser', 'api']).optional(),
 });
 
 type PostFormData = z.infer<typeof postSchema>;
@@ -88,6 +91,7 @@ export const PostComposer = ({
       topics: [],
       whoCanReply: 'everyone',
       allowReplies: true,
+      postingMethod: undefined,
     },
   });
 
@@ -115,6 +119,13 @@ export const PostComposer = ({
       setTopicInput('');
     }
   }, [editPost, prefilledScheduledDate, open, setValue, reset]);
+
+  // Set default posting method from selected account
+  useEffect(() => {
+    if (selectedAccount && !editPost) {
+      setValue('postingMethod', selectedAccount.postingMethod || 'api');
+    }
+  }, [selectedAccount, editPost, setValue]);
 
   const addTopic = () => {
     const topic = topicInput.trim().replace(/^#/, '');
@@ -281,7 +292,10 @@ export const PostComposer = ({
       try {
         // Call the Cloud Function to publish the post
         const publishPostFn = httpsCallable(functions, 'publishPost');
-        const result = await publishPostFn({ postId });
+        const result = await publishPostFn({
+          postId,
+          postingMethod: data.postingMethod || selectedAccount.postingMethod || 'api'
+        });
 
         toast({
           title: 'Post published!',
@@ -515,6 +529,54 @@ export const PostComposer = ({
                     />
                   </div>
                 )}
+              </div>
+
+              <Separator />
+
+              {/* Posting Method */}
+              <div className="space-y-2">
+                <Label htmlFor="postingMethod">Posting Method</Label>
+                <Controller
+                  name="postingMethod"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value || 'api'}
+                      onValueChange={field.onChange}
+                      disabled={isSubmitting}
+                    >
+                      <SelectTrigger id="postingMethod">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="api">
+                          <div className="flex items-center gap-2">
+                            <Zap className="h-4 w-4" />
+                            <div>
+                              <div className="font-medium">Unofficial API</div>
+                              <div className="text-xs text-muted-foreground">Fast (~2s) - Higher risk</div>
+                            </div>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="browser">
+                          <div className="flex items-center gap-2">
+                            <Chrome className="h-4 w-4" />
+                            <div>
+                              <div className="font-medium">Browser Automation</div>
+                              <div className="text-xs text-muted-foreground">Safer - Requires external server</div>
+                            </div>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="text-sm text-muted-foreground">
+                  {watchedFields.postingMethod === 'browser' ?
+                    'Browser method requires a separate posting server with AdsPower' :
+                    'API method is fast but uses unofficial endpoints'
+                  }
+                </p>
               </div>
 
               <Separator />
