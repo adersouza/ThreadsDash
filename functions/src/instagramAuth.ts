@@ -60,6 +60,8 @@ function extractSessionToken(cookieHeader: string | string[] | null): string {
  * Login to Instagram and get account info
  */
 export const instagramLogin = functions.https.onCall(async (data, context) => {
+  console.log('=== instagramLogin v1.1 started ===');
+
   // Check authentication
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
