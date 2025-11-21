@@ -3,9 +3,8 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import { collection, addDoc, updateDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/services/firebase';
-import type { ThreadsAccount } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccountStore } from '@/store/accountStore';
 import { usePostStore } from '@/store/postStore';
@@ -279,13 +278,8 @@ export const PostComposer = ({
       }
 
       try {
-        // Fetch the account data
-        const accountDoc = await getDoc(doc(db, 'users', currentUser!.uid, 'accounts', selectedAccount));
-        if (!accountDoc.exists()) {
-          throw new Error('Account not found');
-        }
-
-        const accountData = { id: accountDoc.id, ...accountDoc.data() } as ThreadsAccount;
+        // Use the selectedAccount object we already have (no need to fetch again)
+        const accountData = selectedAccount;
 
         // Post directly to Threads
         const { postToThreadsUnofficial } = await import('@/services/threadsApiUnofficial');
