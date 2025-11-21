@@ -1,5 +1,6 @@
 /**
  * Scheduled Posts Cloud Function
+ * Version: 1.1 - Updated firebase-functions to v5 for better CORS support
  *
  * Runs every minute to check for posts that need to be published.
  * Handles rate limiting and selects appropriate posting method.
