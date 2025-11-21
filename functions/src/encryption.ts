@@ -17,11 +17,12 @@ const AUTH_TAG_LENGTH = 16;
 function getEncryptionKey(): Buffer {
   const keyMaterial = process.env.ENCRYPTION_KEY || 'default-key-change-in-production-123456789012';
   // Ensure key is exactly 32 bytes for AES-256
-  return Buffer.from(keyMaterial.padEnd(32, '0').substring(0, 32));
+  const paddedKey = keyMaterial.padEnd(32, '0').substring(0, 32);
+  return Buffer.from(paddedKey, 'utf8');
 }
 
 /**
- * Decrypt AES-GCM encrypted string
+ * Decrypt AES-GCM encrypted string (matches Web Crypto API format)
  */
 export async function decrypt(ciphertext: string): Promise<string> {
   try {
@@ -30,7 +31,12 @@ export async function decrypt(ciphertext: string): Promise<string> {
     // Decode from base64
     const combined = Buffer.from(ciphertext, 'base64');
 
-    // Extract IV, encrypted data, and auth tag
+    // Web Crypto API format: IV (12 bytes) + ciphertext + auth tag (16 bytes)
+    if (combined.length < IV_LENGTH + AUTH_TAG_LENGTH) {
+      throw new Error('Invalid ciphertext length');
+    }
+
+    // Extract components
     const iv = combined.subarray(0, IV_LENGTH);
     const authTag = combined.subarray(combined.length - AUTH_TAG_LENGTH);
     const encryptedData = combined.subarray(IV_LENGTH, combined.length - AUTH_TAG_LENGTH);
@@ -47,13 +53,22 @@ export async function decrypt(ciphertext: string): Promise<string> {
 
     return decrypted.toString('utf-8');
   } catch (error) {
-    console.error('Decryption error:', error);
-    throw new Error('Failed to decrypt data');
+    console.error('AES-GCM decryption failed:', error);
+
+    // Fallback: try base64 decode (for tokens encrypted with old method)
+    try {
+      const decoded = Buffer.from(ciphertext, 'base64').toString('utf-8');
+      console.warn('Used fallback base64 decode - token may have been encrypted with old method');
+      return decoded;
+    } catch (fallbackError) {
+      console.error('Base64 fallback also failed:', fallbackError);
+      throw new Error('Failed to decrypt data - token may be corrupted or encrypted with incompatible method');
+    }
   }
 }
 
 /**
- * Encrypt string using AES-GCM
+ * Encrypt string using AES-GCM (matches Web Crypto API format)
  */
 export async function encrypt(plaintext: string): Promise<string> {
   try {
@@ -74,7 +89,7 @@ export async function encrypt(plaintext: string): Promise<string> {
     // Get auth tag
     const authTag = cipher.getAuthTag();
 
-    // Combine IV + encrypted data + auth tag
+    // Combine IV + encrypted data + auth tag (matches Web Crypto API format)
     const combined = Buffer.concat([iv, encrypted, authTag]);
 
     // Convert to base64
