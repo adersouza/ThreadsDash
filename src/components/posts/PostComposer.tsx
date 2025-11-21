@@ -255,31 +255,43 @@ export const PostComposer = ({
     try {
       setIsSubmitting(true);
 
-      // Save post as scheduled for now (to trigger Cloud Function)
+      // Prepare post data with proper structure
       const postData = {
-        ...data,
+        userId: currentUser!.uid,
+        accountId: data.accountId,
+        content: data.content,
+        media: media.map((m) => ({
+          id: m.id,
+          type: m.type,
+          url: m.url,
+          thumbnailUrl: m.thumbnailUrl,
+          fileName: m.fileName,
+          size: m.size,
+          uploadedAt: m.uploadedAt,
+        })),
+        status: 'scheduled' as PostStatus,
         scheduledFor: new Date(), // Schedule for immediate publishing
+        publishedAt: null,
+        topics: data.topics,
+        settings: {
+          allowReplies: data.allowReplies,
+          whoCanReply: data.whoCanReply,
+          topics: data.topics,
+        },
+        updatedAt: serverTimestamp(),
       };
 
       // Save to Firestore
       let postId: string;
       if (editPost) {
         const postRef = doc(db, 'users', currentUser!.uid, 'posts', editPost.id);
-        await updateDoc(postRef, {
-          ...postData,
-          scheduledFor: postData.scheduledFor,
-          status: 'scheduled',
-          updatedAt: serverTimestamp(),
-        });
+        await updateDoc(postRef, postData);
         postId = editPost.id;
       } else {
         const postsRef = collection(db, 'users', currentUser!.uid, 'posts');
         const docRef = await addDoc(postsRef, {
           ...postData,
-          scheduledFor: postData.scheduledFor,
-          status: 'scheduled',
           createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
         });
         postId = docRef.id;
       }
