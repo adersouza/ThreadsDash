@@ -1,5 +1,6 @@
 /**
  * Instagram Authentication Cloud Function
+ * Version: 1.1 - Added detailed logging for debugging
  *
  * Handles Instagram login from the server-side to avoid CORS issues
  */
