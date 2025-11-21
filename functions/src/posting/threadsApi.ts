@@ -4,6 +4,8 @@
  * Node.js compatible version of the unofficial Threads API service
  */
 
+import { decrypt } from '../encryption';
+
 interface PostData {
   content: string;
   media?: any[];
@@ -67,18 +69,6 @@ class RateLimiter {
 
     const oldestRequest = recentRequests[0];
     return new Date(oldestRequest + 60 * 60 * 1000);
-  }
-}
-
-/**
- * Simple decryption (base64)
- * In production, use proper encryption
- */
-function decrypt(encrypted: string): string {
-  try {
-    return Buffer.from(encrypted, 'base64').toString('utf-8');
-  } catch {
-    return encrypted;
   }
 }
 
@@ -170,7 +160,7 @@ export async function postToThreadsApi(
   }
 
   try {
-    const token = decrypt(instagramToken);
+    const token = await decrypt(instagramToken);
     const hasMedia = postData.media && postData.media.length > 0;
 
     // Upload media if present (only first media item for now)
