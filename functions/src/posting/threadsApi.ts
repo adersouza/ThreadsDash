@@ -235,6 +235,9 @@ export async function postToThreadsApi(
         'Accept-Language': 'en-US,en;q=0.9',
         'X-Instagram-AJAX': '1',
         'X-Requested-With': 'XMLHttpRequest',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
       },
       body: new URLSearchParams(apiData).toString(),
     });
