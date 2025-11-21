@@ -217,11 +217,12 @@ export async function postToThreadsApi(
     }
 
     // Choose endpoint based on media presence
+    // Threads uses Instagram's API infrastructure
     const endpoint = hasMedia
-      ? 'https://www.threads.com/api/v1/media/configure_text_post_app_feed/'
-      : 'https://www.threads.com/api/v1/media/configure_text_only_post/';
+      ? 'https://www.instagram.com/api/v1/media/configure_text_post_app_feed/'
+      : 'https://www.instagram.com/api/v1/media/configure_text_only_post/';
 
-    // Make API request to Threads web endpoint
+    // Make API request to Instagram API (Threads backend)
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -232,8 +233,8 @@ export async function postToThreadsApi(
         'X-IG-App-ID': '238260118697367',
         'X-ASBD-ID': '359341',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Origin': 'https://www.threads.net',
-        'Referer': 'https://www.threads.net/',
+        'Origin': 'https://www.instagram.com',
+        'Referer': 'https://www.instagram.com/',
         'Accept': '*/*',
         'Accept-Language': 'en-US,en;q=0.9',
         'X-Instagram-AJAX': '1',
