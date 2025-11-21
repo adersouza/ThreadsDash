@@ -145,6 +145,8 @@ export async function postToThreadsApi(
   instagramToken: string,
   instagramUserId: string,
   csrfToken: string,
+  igDid: string,
+  mid: string,
   postData: PostData,
   accountId: string
 ): Promise<PostingResult> {
@@ -163,6 +165,8 @@ export async function postToThreadsApi(
   try {
     const token = await decrypt(instagramToken);
     const csrf = await decrypt(csrfToken);
+    const igDidDecrypted = igDid ? await decrypt(igDid) : '';
+    const midDecrypted = mid ? await decrypt(mid) : '';
     const hasMedia = postData.media && postData.media.length > 0;
 
     // Upload media if present (only first media item for now)
@@ -217,32 +221,46 @@ export async function postToThreadsApi(
     }
 
     // Choose endpoint based on media presence
-    // Threads uses Instagram's text_post_app endpoints (Threads' internal codename: Barcelona)
-    const endpoint = 'https://www.instagram.com/api/v1/text_post_app_textposts/create/';
+    // Threads API endpoints are on threads.com domain
+    const endpoint = hasMedia
+      ? 'https://www.threads.com/api/v1/media/configure_text_post_app_feed/'
+      : 'https://www.threads.com/api/v1/media/configure_text_only_post/';
 
     console.log('Posting to endpoint:', endpoint);
     console.log('Post data:', JSON.stringify(apiData, null, 2));
 
-    // Make API request to Instagram API (Threads backend)
+    // Build Cookie header with all required cookies from real browser capture
+    let cookieHeader = `sessionid=${token}; ds_user_id=${instagramUserId}; csrftoken=${csrf}; dpr=1`;
+    if (igDidDecrypted) {
+      cookieHeader += `; ig_did=${igDidDecrypted}`;
+    }
+    if (midDecrypted) {
+      cookieHeader += `; mid=${midDecrypted}`;
+    }
+
+    // Make API request to Threads API
+    // Based on real browser request captured from threads.com
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        'Authorization': `Bearer IGT:2:${token}`,
-        'Cookie': `sessionid=${token}; ds_user_id=${instagramUserId}; csrftoken=${csrf}`,
+        'Cookie': cookieHeader,
         'X-CSRFToken': csrf,
         'X-IG-App-ID': '238260118697367',
         'X-ASBD-ID': '359341',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Origin': 'https://www.instagram.com',
-        'Referer': 'https://www.instagram.com/',
+        'X-Instagram-AJAX': '0',
+        'X-Bloks-Version-ID': '22713cafbb647b89c4e9c1acdea97d89c8c2046e2f4b18729760e9b1ae0724f7',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+        'Origin': 'https://www.threads.com',
+        'Referer': 'https://www.threads.com/',
         'Accept': '*/*',
         'Accept-Language': 'en-US,en;q=0.9',
-        'X-Instagram-AJAX': '1',
-        'X-Requested-With': 'XMLHttpRequest',
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Site': 'same-origin',
+        'Sec-CH-UA': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+        'Sec-CH-UA-Mobile': '?0',
+        'Sec-CH-UA-Platform': '"macOS"',
       },
       body: new URLSearchParams(apiData).toString(),
     });

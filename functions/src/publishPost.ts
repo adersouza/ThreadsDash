@@ -81,6 +81,8 @@ export const publishPost = functions.https.onCall(async (data, context) => {
       account.instagramToken,
       account.instagramUserId,
       account.csrfToken || '',
+      account.igDid || '',
+      account.mid || '',
       post as any,
       accountDoc.id
     );

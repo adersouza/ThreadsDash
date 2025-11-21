@@ -36,6 +36,8 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
     instagramToken: '',
     instagramUserId: '',
     csrfToken: '',
+    igDid: '',
+    mid: '',
   });
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
@@ -64,9 +66,11 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
     try {
       setLoading(true);
 
-      // Encrypt Instagram token and CSRF token (using simple base64 for now)
+      // Encrypt Instagram token, CSRF token, ig_did, and mid (using simple base64 for now)
       const encryptedToken = encryptSync(formData.instagramToken);
       const encryptedCsrfToken = encryptSync(formData.csrfToken);
+      const encryptedIgDid = formData.igDid ? encryptSync(formData.igDid) : '';
+      const encryptedMid = formData.mid ? encryptSync(formData.mid) : '';
 
       // Create account in Firestore
       const accountData: any = {
@@ -78,6 +82,8 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         instagramToken: encryptedToken,
         instagramUserId: formData.instagramUserId,
         csrfToken: encryptedCsrfToken,
+        igDid: encryptedIgDid,
+        mid: encryptedMid,
         isActive: true,
         // Analytics baseline - defaults to 0, will be populated on first data fetch
         baselineFollowersCount: 0,
@@ -105,6 +111,8 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         instagramToken: '',
         instagramUserId: '',
         csrfToken: '',
+        igDid: '',
+        mid: '',
       });
       onOpenChange(false);
     } catch (error) {
@@ -252,9 +260,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
                         <li>Open <a href="https://www.threads.net" target="_blank" rel="noopener noreferrer" className="text-primary underline">threads.net</a> and log in</li>
                         <li>Press F12 to open Developer Tools</li>
                         <li>Go to Application → Cookies → threads.net</li>
-                        <li>Find "sessionid" and copy its value</li>
-                        <li>Find "ds_user_id" and copy its value</li>
-                        <li>Find "csrftoken" and copy its value</li>
+                        <li>Find and copy these cookie values: "sessionid", "ds_user_id", "csrftoken", "ig_did", "mid"</li>
                       </ol>
                     </AlertDescription>
                   </Alert>
@@ -298,6 +304,34 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
                     />
                     <p className="text-xs text-muted-foreground">
                       The "csrftoken" cookie value from threads.net
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="igDid">IG DID</Label>
+                    <Input
+                      id="igDid"
+                      type="password"
+                      placeholder="Paste ig_did cookie value here"
+                      value={formData.igDid}
+                      onChange={(e) => setFormData({ ...formData, igDid: e.target.value })}
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      The "ig_did" cookie value from threads.net
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="mid">MID</Label>
+                    <Input
+                      id="mid"
+                      type="password"
+                      placeholder="Paste mid cookie value here"
+                      value={formData.mid}
+                      onChange={(e) => setFormData({ ...formData, mid: e.target.value })}
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      The "mid" cookie value from threads.net
                     </p>
                   </div>
                 </div>

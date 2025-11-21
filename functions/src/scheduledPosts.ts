@@ -36,6 +36,8 @@ interface Account {
   instagramToken?: string;
   instagramUserId?: string;
   csrfToken?: string;
+  igDid?: string;
+  mid?: string;
   adsPowerProfileId?: string;
   lastPostAt?: admin.firestore.Timestamp | Date;
   postsLastHour?: number;
@@ -190,6 +192,8 @@ async function postViaApi(account: Account, post: Post): Promise<{
       account.instagramToken,
       account.instagramUserId,
       account.csrfToken || '',
+      account.igDid || '',
+      account.mid || '',
       {
         content: post.content,
         media: post.media,
