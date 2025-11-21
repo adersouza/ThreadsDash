@@ -3,9 +3,9 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { collection, addDoc, updateDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/services/firebase';
+import type { ThreadsAccount } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccountStore } from '@/store/accountStore';
 import { usePostStore } from '@/store/postStore';
@@ -273,21 +273,62 @@ export const PostComposer = ({
         postId = docRef.id;
       }
 
-      // Call Cloud Function to publish immediately
-      const functions = getFunctions();
-      const publishPostNow = httpsCallable(functions, 'publishPostNow');
-
+      // Publish post directly using the Instagram API
       try {
-        await publishPostNow({ postId });
-        toast({
-          title: 'Publishing post',
-          description: 'Your post is being published now...',
+        // Fetch the account data
+        const accountDoc = await getDoc(doc(db, 'users', currentUser.uid, 'accounts', selectedAccount));
+        if (!accountDoc.exists()) {
+          throw new Error('Account not found');
+        }
+
+        const accountData = { id: accountDoc.id, ...accountDoc.data() } as ThreadsAccount;
+
+        // Post directly to Threads
+        const { postToThreadsUnofficial } = await import('@/services/threadsApiUnofficial');
+        const result = await postToThreadsUnofficial(accountData, {
+          id: postId,
+          content: data.content,
+          media: data.media || [],
+          status: 'published',
+          scheduledFor: null,
+        } as any);
+
+        if (result.success) {
+          // Update post status to published
+          await updateDoc(doc(db, 'users', currentUser.uid, 'posts', postId), {
+            status: 'published',
+            publishedAt: serverTimestamp(),
+            threadsPostId: result.postId,
+          });
+
+          toast({
+            title: 'Post published!',
+            description: 'Your post has been published to Threads.',
+          });
+        } else {
+          // Update post status to failed
+          await updateDoc(doc(db, 'users', currentUser.uid, 'posts', postId), {
+            status: 'failed',
+            error: result.error,
+          });
+
+          toast({
+            title: 'Publishing failed',
+            description: result.error || 'Failed to publish post to Threads.',
+            variant: 'destructive',
+          });
+        }
+      } catch (error: any) {
+        console.error('Error publishing post:', error);
+        // Update post status to failed
+        await updateDoc(doc(db, 'users', currentUser.uid, 'posts', postId), {
+          status: 'failed',
+          error: error.message,
         });
-      } catch (error) {
-        console.error('Error calling Cloud Function:', error);
+
         toast({
-          title: 'Post saved',
-          description: 'Post saved but publishing failed. Will retry automatically.',
+          title: 'Publishing failed',
+          description: error.message || 'Failed to publish post.',
           variant: 'destructive',
         });
       }
