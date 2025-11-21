@@ -94,18 +94,32 @@ export const instagramLogin = functions.https.onCall(async (data, context) => {
     });
 
     console.log('Login response status:', loginResponse.status);
+    console.log('Login response content-type:', loginResponse.headers.get('content-type'));
+
+    // Read response as text first to see what we're getting
+    const responseText = await loginResponse.text();
+    console.log('Response body (first 500 chars):', responseText.substring(0, 500));
 
     if (!loginResponse.ok) {
-      const errorText = await loginResponse.text();
-      console.error('Login failed with status:', loginResponse.status, 'Response:', errorText);
+      console.error('Login failed with status:', loginResponse.status, 'Response:', responseText);
       throw new functions.https.HttpsError(
         'unauthenticated',
-        `Instagram API returned ${loginResponse.status}: ${errorText.substring(0, 200)}`
+        `Instagram API returned ${loginResponse.status}: ${responseText.substring(0, 200)}`
       );
     }
 
-    const loginData: InstagramLoginResponse = await loginResponse.json();
-    console.log('Login data received, logged_in:', !!loginData.logged_in_user, '2FA required:', !!loginData.two_factor_required);
+    // Try to parse the response as JSON
+    let loginData: InstagramLoginResponse;
+    try {
+      loginData = JSON.parse(responseText);
+      console.log('Login data received, logged_in:', !!loginData.logged_in_user, '2FA required:', !!loginData.two_factor_required);
+    } catch (e) {
+      console.error('Failed to parse response as JSON:', e);
+      throw new functions.https.HttpsError(
+        'internal',
+        `Instagram returned non-JSON response: ${responseText.substring(0, 200)}`
+      );
+    }
 
     let sessionToken = '';
     let userId = '';
