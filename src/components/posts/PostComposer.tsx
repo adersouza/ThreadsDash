@@ -274,9 +274,13 @@ export const PostComposer = ({
       }
 
       // Publish post directly using the Instagram API
+      if (!selectedAccount) {
+        throw new Error('No account selected');
+      }
+
       try {
         // Fetch the account data
-        const accountDoc = await getDoc(doc(db, 'users', currentUser.uid, 'accounts', selectedAccount));
+        const accountDoc = await getDoc(doc(db, 'users', currentUser!.uid, 'accounts', selectedAccount));
         if (!accountDoc.exists()) {
           throw new Error('Account not found');
         }
@@ -285,20 +289,21 @@ export const PostComposer = ({
 
         // Post directly to Threads
         const { postToThreadsUnofficial } = await import('@/services/threadsApiUnofficial');
-        const result = await postToThreadsUnofficial(accountData, {
+        const postPayload: any = {
           id: postId,
           content: data.content,
-          media: data.media || [],
+          media: [],
           status: 'published',
           scheduledFor: null,
-        } as any);
+        };
+
+        const result = await postToThreadsUnofficial(accountData, postPayload);
 
         if (result.success) {
           // Update post status to published
-          await updateDoc(doc(db, 'users', currentUser.uid, 'posts', postId), {
+          await updateDoc(doc(db, 'users', currentUser!.uid, 'posts', postId), {
             status: 'published',
             publishedAt: serverTimestamp(),
-            threadsPostId: result.postId,
           });
 
           toast({
@@ -307,7 +312,7 @@ export const PostComposer = ({
           });
         } else {
           // Update post status to failed
-          await updateDoc(doc(db, 'users', currentUser.uid, 'posts', postId), {
+          await updateDoc(doc(db, 'users', currentUser!.uid, 'posts', postId), {
             status: 'failed',
             error: result.error,
           });
@@ -321,7 +326,7 @@ export const PostComposer = ({
       } catch (error: any) {
         console.error('Error publishing post:', error);
         // Update post status to failed
-        await updateDoc(doc(db, 'users', currentUser.uid, 'posts', postId), {
+        await updateDoc(doc(db, 'users', currentUser!.uid, 'posts', postId), {
           status: 'failed',
           error: error.message,
         });

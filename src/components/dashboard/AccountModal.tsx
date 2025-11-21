@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
 import { collection, addDoc, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { encrypt } from '@/services/encryption';
 import {
   Dialog,
@@ -19,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Key, Zap, AlertCircle } from 'lucide-react';
+import { Loader2, Upload, Key, AlertCircle } from 'lucide-react';
 
 interface AccountModalProps {
   open: boolean;
