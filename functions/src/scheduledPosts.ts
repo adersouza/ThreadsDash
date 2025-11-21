@@ -35,6 +35,7 @@ interface Account {
   postingMethod: 'browser' | 'api';
   instagramToken?: string;
   instagramUserId?: string;
+  csrfToken?: string;
   adsPowerProfileId?: string;
   lastPostAt?: admin.firestore.Timestamp | Date;
   postsLastHour?: number;
@@ -188,6 +189,7 @@ async function postViaApi(account: Account, post: Post): Promise<{
     const result = await postToThreadsApi(
       account.instagramToken,
       account.instagramUserId,
+      account.csrfToken || '',
       {
         content: post.content,
         media: post.media,

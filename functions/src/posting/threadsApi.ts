@@ -144,6 +144,7 @@ async function uploadMedia(
 export async function postToThreadsApi(
   instagramToken: string,
   instagramUserId: string,
+  csrfToken: string,
   postData: PostData,
   accountId: string
 ): Promise<PostingResult> {
@@ -161,6 +162,7 @@ export async function postToThreadsApi(
 
   try {
     const token = await decrypt(instagramToken);
+    const csrf = await decrypt(csrfToken);
     const hasMedia = postData.media && postData.media.length > 0;
 
     // Upload media if present (only first media item for now)
@@ -225,7 +227,8 @@ export async function postToThreadsApi(
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
         'Authorization': `Bearer IGT:2:${token}`,
-        'Cookie': `sessionid=${token}; ds_user_id=${instagramUserId}`,
+        'Cookie': `sessionid=${token}; ds_user_id=${instagramUserId}; csrftoken=${csrf}`,
+        'X-CSRFToken': csrf,
         'X-IG-App-ID': '238260118697367',
         'X-ASBD-ID': '359341',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

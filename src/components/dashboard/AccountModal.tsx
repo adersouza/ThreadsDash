@@ -35,6 +35,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
     bio: '',
     instagramToken: '',
     instagramUserId: '',
+    csrfToken: '',
   });
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
@@ -63,8 +64,9 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
     try {
       setLoading(true);
 
-      // Encrypt Instagram token (using simple base64 for now)
+      // Encrypt Instagram token and CSRF token (using simple base64 for now)
       const encryptedToken = encryptSync(formData.instagramToken);
+      const encryptedCsrfToken = encryptSync(formData.csrfToken);
 
       // Create account in Firestore
       const accountData: any = {
@@ -75,6 +77,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         postingMethod: 'api', // Default to API method since we have credentials
         instagramToken: encryptedToken,
         instagramUserId: formData.instagramUserId,
+        csrfToken: encryptedCsrfToken,
         isActive: true,
         // Analytics baseline - defaults to 0, will be populated on first data fetch
         baselineFollowersCount: 0,
@@ -101,6 +104,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         bio: '',
         instagramToken: '',
         instagramUserId: '',
+        csrfToken: '',
       });
       onOpenChange(false);
     } catch (error) {
@@ -243,13 +247,14 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
                   <Alert>
                     <Key className="h-4 w-4" />
                     <AlertDescription className="text-xs space-y-2">
-                      <p><strong>How to get your token:</strong></p>
+                      <p><strong>How to get your credentials:</strong></p>
                       <ol className="list-decimal list-inside space-y-1 ml-2">
                         <li>Open <a href="https://www.threads.net" target="_blank" rel="noopener noreferrer" className="text-primary underline">threads.net</a> and log in</li>
                         <li>Press F12 to open Developer Tools</li>
                         <li>Go to Application → Cookies → threads.net</li>
-                        <li>Find "sessionid" and copy its value (your token)</li>
-                        <li>Find "ds_user_id" and copy its value (your user ID)</li>
+                        <li>Find "sessionid" and copy its value</li>
+                        <li>Find "ds_user_id" and copy its value</li>
+                        <li>Find "csrftoken" and copy its value</li>
                       </ol>
                     </AlertDescription>
                   </Alert>
@@ -279,6 +284,20 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
                     />
                     <p className="text-xs text-muted-foreground">
                       The "ds_user_id" cookie value from threads.net
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="csrfToken">CSRF Token</Label>
+                    <Input
+                      id="csrfToken"
+                      type="password"
+                      placeholder="Paste csrftoken cookie value here"
+                      value={formData.csrfToken}
+                      onChange={(e) => setFormData({ ...formData, csrfToken: e.target.value })}
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      The "csrftoken" cookie value from threads.net
                     </p>
                   </div>
                 </div>

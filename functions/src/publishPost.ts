@@ -80,6 +80,7 @@ export const publishPost = functions.https.onCall(async (data, context) => {
     const result = await postToThreadsApi(
       account.instagramToken,
       account.instagramUserId,
+      account.csrfToken || '',
       post as any,
       accountDoc.id
     );
