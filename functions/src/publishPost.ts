@@ -43,10 +43,18 @@ export const publishPost = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('not-found', 'Account not found');
     }
 
-    const account = { id: accountDoc.id, ...accountDoc.data() };
+    const account = accountDoc.data();
+    if (!account) {
+      throw new functions.https.HttpsError('not-found', 'Account data not found');
+    }
 
     // Post to Threads
-    const result = await postToThreadsApi(account as any, { id: postId, ...post } as any);
+    const result = await postToThreadsApi(
+      account.instagramToken,
+      account.instagramUserId,
+      post as any,
+      accountDoc.id
+    );
 
     if (result.success) {
       // Update post status
