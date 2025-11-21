@@ -81,7 +81,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
 
         // Call Cloud Function to login (server-side, no CORS issues)
         const functions = getFunctions();
-        const instagramLoginFn = httpsCallable(functions, 'instagramLoginV2');
+        const instagramLoginFn = httpsCallable(functions, 'instagramLogin');
 
         try {
           const result = await instagramLoginFn({
