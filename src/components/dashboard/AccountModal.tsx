@@ -30,16 +30,12 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
   const { currentUser } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [credentialMethod, setCredentialMethod] = useState<'auto' | 'manual'>('auto');
   const [formData, setFormData] = useState({
     username: '',
     displayName: '',
     bio: '',
     instagramToken: '',
     instagramUserId: '',
-    instagramUsername: '',
-    instagramPassword: '',
-    twoFactorSecret: '',
   });
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
@@ -56,95 +52,20 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
       return;
     }
 
+    if (!formData.instagramToken || !formData.instagramUserId) {
+      toast({
+        title: 'Missing credentials',
+        description: 'Please fill in Instagram token and user ID',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       setLoading(true);
 
-      let instagramToken = '';
-      let instagramUserId = '';
-
-      let baselineFollowers = 0;
-      let baselineFollowing = 0;
-      let baselinePosts = 0;
-
-      // Get credentials based on method
-      if (credentialMethod === 'auto') {
-        // Automated login with username/password via Cloud Function
-        if (!formData.instagramUsername || !formData.instagramPassword) {
-          toast({
-            title: 'Missing credentials',
-            description: 'Please fill in Instagram username and password',
-            variant: 'destructive',
-          });
-          setLoading(false);
-          return;
-        }
-
-        // Call Cloud Function to login (server-side, no CORS issues)
-        const functions = getFunctions();
-        const instagramLoginFn = httpsCallable(functions, 'instagramLogin');
-
-        try {
-          const result = await instagramLoginFn({
-            username: formData.instagramUsername,
-            password: formData.instagramPassword,
-            twoFactorSecret: formData.twoFactorSecret || undefined,
-          });
-
-          const data = result.data as any;
-
-          if (!data.success || !data.token || !data.userId) {
-            toast({
-              title: 'Login failed',
-              description: 'Could not authenticate with Instagram',
-              variant: 'destructive',
-            });
-            setLoading(false);
-            return;
-          }
-
-          instagramToken = data.token;
-          instagramUserId = data.userId;
-
-          // Account stats returned from Cloud Function
-          baselineFollowers = data.followers || 0;
-          baselineFollowing = data.following || 0;
-          baselinePosts = data.posts || 0;
-
-        } catch (error: any) {
-          console.error('Instagram login error:', error);
-          toast({
-            title: 'Login failed',
-            description: error.message || 'Could not authenticate with Instagram',
-            variant: 'destructive',
-          });
-          setLoading(false);
-          return;
-        }
-      } else {
-        // Manual token entry - baseline defaults to 0
-        if (!formData.instagramToken || !formData.instagramUserId) {
-          toast({
-            title: 'Missing credentials',
-            description: 'Please fill in Instagram token and user ID',
-            variant: 'destructive',
-          });
-          setLoading(false);
-          return;
-        }
-
-        instagramToken = formData.instagramToken;
-        instagramUserId = formData.instagramUserId;
-        // Baseline stays at 0 for manual entry
-      }
-
       // Encrypt Instagram token
-      const encryptedToken = await encrypt(instagramToken);
-
-      // Encrypt 2FA secret if provided
-      let encrypted2FASecret = null;
-      if (formData.twoFactorSecret) {
-        encrypted2FASecret = await encrypt(formData.twoFactorSecret);
-      }
+      const encryptedToken = await encrypt(formData.instagramToken);
 
       // Create account in Firestore
       const accountData: any = {
@@ -154,23 +75,18 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         avatarUrl: null,
         postingMethod: 'api', // Default to API method since we have credentials
         instagramToken: encryptedToken,
-        instagramUserId: instagramUserId,
+        instagramUserId: formData.instagramUserId,
         isActive: true,
-        // Analytics baseline - track initial metrics when account is added
-        baselineFollowersCount: baselineFollowers,
-        baselineFollowingCount: baselineFollowing,
-        baselinePostsCount: baselinePosts,
-        followersCount: baselineFollowers, // Set current count to baseline initially
-        followingCount: baselineFollowing,
-        postsCount: baselinePosts,
+        // Analytics baseline - defaults to 0, will be populated on first data fetch
+        baselineFollowersCount: 0,
+        baselineFollowingCount: 0,
+        baselinePostsCount: 0,
+        followersCount: 0,
+        followingCount: 0,
+        postsCount: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
-
-      // Add 2FA secret if provided
-      if (encrypted2FASecret) {
-        accountData.twoFactorSecret = encrypted2FASecret;
-      }
 
       await addDoc(collection(db, 'users', currentUser.uid, 'accounts'), accountData);
 
@@ -186,11 +102,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
         bio: '',
         instagramToken: '',
         instagramUserId: '',
-        instagramUsername: '',
-        instagramPassword: '',
-        twoFactorSecret: '',
       });
-      setCredentialMethod('auto');
       onOpenChange(false);
     } catch (error) {
       console.error('Error adding account:', error);
@@ -329,137 +241,47 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
                     Instagram Credentials <span className="text-destructive">*</span>
                   </Label>
 
-                  {/* Method Selection */}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div
-                      onClick={() => setCredentialMethod('auto')}
-                      className={`cursor-pointer rounded-lg border-2 p-3 transition-all ${
-                        credentialMethod === 'auto'
-                          ? 'border-primary bg-primary/5'
-                          : 'border-muted hover:border-primary/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Zap className="h-4 w-4 text-primary" />
-                        <span className="font-medium text-sm">Easy (Recommended)</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Enter username & password
-                      </p>
-                    </div>
-                    <div
-                      onClick={() => setCredentialMethod('manual')}
-                      className={`cursor-pointer rounded-lg border-2 p-3 transition-all ${
-                        credentialMethod === 'manual'
-                          ? 'border-primary bg-primary/5'
-                          : 'border-muted hover:border-primary/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Key className="h-4 w-4 text-primary" />
-                        <span className="font-medium text-sm">Manual</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Paste token directly
-                      </p>
-                    </div>
+                  <Alert>
+                    <Key className="h-4 w-4" />
+                    <AlertDescription className="text-xs space-y-2">
+                      <p><strong>How to get your token:</strong></p>
+                      <ol className="list-decimal list-inside space-y-1 ml-2">
+                        <li>Open <a href="https://www.threads.net" target="_blank" rel="noopener noreferrer" className="text-primary underline">threads.net</a> and log in</li>
+                        <li>Press F12 to open Developer Tools</li>
+                        <li>Go to Application → Cookies → threads.net</li>
+                        <li>Find "sessionid" and copy its value (your token)</li>
+                        <li>Find "ds_user_id" and copy its value (your user ID)</li>
+                      </ol>
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="instagramToken">Instagram Session Token</Label>
+                    <Input
+                      id="instagramToken"
+                      type="password"
+                      placeholder="Paste sessionid cookie value here"
+                      value={formData.instagramToken}
+                      onChange={(e) => setFormData({ ...formData, instagramToken: e.target.value })}
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      The "sessionid" cookie value from threads.net
+                    </p>
                   </div>
-
-                  {/* Auto Method - Username/Password */}
-                  {credentialMethod === 'auto' && (
-                    <div className="space-y-3">
-                      <Alert>
-                        <Zap className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          We'll automatically get your token by logging in. Your password is never stored.
-                        </AlertDescription>
-                      </Alert>
-                      <div className="grid gap-2">
-                        <Label htmlFor="instagramUsername">Instagram Username</Label>
-                        <Input
-                          id="instagramUsername"
-                          type="text"
-                          placeholder="your_instagram_username"
-                          value={formData.instagramUsername}
-                          onChange={(e) => setFormData({ ...formData, instagramUsername: e.target.value })}
-                          disabled={loading}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="instagramPassword">Instagram Password</Label>
-                        <Input
-                          id="instagramPassword"
-                          type="password"
-                          placeholder="Your Instagram password"
-                          value={formData.instagramPassword}
-                          onChange={(e) => setFormData({ ...formData, instagramPassword: e.target.value })}
-                          disabled={loading}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Used once to get your token, then discarded
-                        </p>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="twoFactorSecret">2FA Secret (Optional)</Label>
-                        <Input
-                          id="twoFactorSecret"
-                          type="password"
-                          placeholder="JBSWY3DPEHPK3PXP (your TOTP secret)"
-                          value={formData.twoFactorSecret}
-                          onChange={(e) => setFormData({ ...formData, twoFactorSecret: e.target.value })}
-                          disabled={loading}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          If 2FA is enabled, paste your TOTP secret key here. We'll auto-generate codes.
-                        </p>
-                      </div>
-                      <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          <strong>2FA Support:</strong> If you have 2FA enabled, provide your secret key above. Without it, login will fail. The secret is the code shown when setting up authenticator apps.
-                        </AlertDescription>
-                      </Alert>
-                    </div>
-                  )}
-
-                  {/* Manual Method - Token/User ID */}
-                  {credentialMethod === 'manual' && (
-                    <div className="space-y-3">
-                      <Alert>
-                        <Key className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          Extract these values from your browser's developer tools while logged into Threads.net
-                        </AlertDescription>
-                      </Alert>
-                      <div className="grid gap-2">
-                        <Label htmlFor="instagramToken">Instagram Token</Label>
-                        <Input
-                          id="instagramToken"
-                          type="password"
-                          placeholder="eyJkc191c2VyX2lkIjo..."
-                          value={formData.instagramToken}
-                          onChange={(e) => setFormData({ ...formData, instagramToken: e.target.value })}
-                          disabled={loading}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Look for Authorization header or sessionid cookie
-                        </p>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="instagramUserId">Instagram User ID</Label>
-                        <Input
-                          id="instagramUserId"
-                          placeholder="1234567890"
-                          value={formData.instagramUserId}
-                          onChange={(e) => setFormData({ ...formData, instagramUserId: e.target.value })}
-                          disabled={loading}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Your numeric Instagram user ID (pk field)
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                  <div className="grid gap-2">
+                    <Label htmlFor="instagramUserId">Instagram User ID</Label>
+                    <Input
+                      id="instagramUserId"
+                      placeholder="1234567890"
+                      value={formData.instagramUserId}
+                      onChange={(e) => setFormData({ ...formData, instagramUserId: e.target.value })}
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      The "ds_user_id" cookie value from threads.net
+                    </p>
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="bio">Bio (optional)</Label>
