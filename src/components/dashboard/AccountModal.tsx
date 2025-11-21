@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Key, AlertCircle } from 'lucide-react';
+import { Loader2, Upload, Key, AlertCircle, CheckCircle, ExternalLink } from 'lucide-react';
 
 interface AccountModalProps {
   open: boolean;
@@ -40,6 +40,31 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
     mid: '',
   });
   const [csvFile, setCsvFile] = useState<File | null>(null);
+
+  const handleOAuthConnect = () => {
+    if (!currentUser) {
+      toast({
+        title: 'Authentication required',
+        description: 'Please log in to connect a Threads account',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Build OAuth authorization URL
+    const appId = import.meta.env.VITE_THREADS_APP_ID;
+    const redirectUri = import.meta.env.VITE_THREADS_REDIRECT_URI || `${window.location.origin}/oauth/callback`;
+    const scopes = 'threads_basic,threads_content_publish';
+    const state = Math.random().toString(36).substring(7); // CSRF protection
+
+    const authUrl = `https://threads.net/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code&state=${state}`;
+
+    // Store state in sessionStorage for verification
+    sessionStorage.setItem('oauth_state', state);
+
+    // Redirect to Threads authorization page
+    window.location.href = authUrl;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,14 +235,77 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="single" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="single">Single Account</TabsTrigger>
-            <TabsTrigger value="bulk">Bulk Import (CSV)</TabsTrigger>
+        <Tabs defaultValue="oauth" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="oauth">OAuth (Recommended)</TabsTrigger>
+            <TabsTrigger value="manual">Manual (Legacy)</TabsTrigger>
+            <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
           </TabsList>
 
-          {/* Single Account Tab */}
-          <TabsContent value="single">
+          {/* OAuth Tab - Recommended Method */}
+          <TabsContent value="oauth">
+            <div className="grid gap-6 py-6">
+              <Alert>
+                <CheckCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Official Threads API Integration</strong>
+                  <p className="mt-1 text-sm">
+                    Connect your Threads account securely using Meta's official OAuth flow. This is the recommended and most secure method.
+                  </p>
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-4">
+                <div className="bg-muted p-4 rounded-lg space-y-2">
+                  <h4 className="font-semibold text-sm">Benefits of OAuth:</h4>
+                  <ul className="text-sm space-y-1 text-muted-foreground">
+                    <li>✓ Secure - No manual cookie extraction needed</li>
+                    <li>✓ Official - Uses Meta's approved API</li>
+                    <li>✓ Auto-refresh - Tokens automatically renewed before expiration</li>
+                    <li>✓ Full access - Post, read insights, and manage content</li>
+                    <li>✓ Revocable - You can revoke access anytime from Threads settings</li>
+                  </ul>
+                </div>
+
+                <Alert variant="default" className="border-blue-200 bg-blue-50">
+                  <AlertCircle className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-sm text-blue-900">
+                    When you click "Connect with Threads", you'll be redirected to Threads to authorize this app. After authorization, you'll be brought back here automatically.
+                  </AlertDescription>
+                </Alert>
+              </div>
+
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  className="w-full sm:w-auto"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleOAuthConnect}
+                  className="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Connect with Threads
+                </Button>
+              </DialogFooter>
+            </div>
+          </TabsContent>
+
+          {/* Manual Tab - Legacy Method */}
+          <TabsContent value="manual">
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Legacy Method - Not Recommended</strong>
+                <p className="text-sm mt-1">
+                  Manual cookie extraction is insecure and unreliable. Please use OAuth (recommended) for official API access with better security and reliability.
+                </p>
+              </AlertDescription>
+            </Alert>
             <form onSubmit={handleSubmit}>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">

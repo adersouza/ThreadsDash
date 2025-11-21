@@ -33,11 +33,14 @@ interface Account {
   userId: string;
   username: string;
   postingMethod: 'browser' | 'api';
-  instagramToken?: string;
-  instagramUserId?: string;
-  csrfToken?: string;
-  igDid?: string;
-  mid?: string;
+  authMethod?: 'oauth' | 'cookies'; // OAuth vs legacy cookie auth
+  accessToken?: string; // OAuth access token
+  threadsUserId?: string; // Threads user ID for OAuth
+  instagramToken?: string; // Legacy cookie auth
+  instagramUserId?: string; // Legacy cookie auth
+  csrfToken?: string; // Legacy cookie auth
+  igDid?: string; // Legacy cookie auth
+  mid?: string; // Legacy cookie auth
   adsPowerProfileId?: string;
   lastPostAt?: admin.firestore.Timestamp | Date;
   postsLastHour?: number;
@@ -168,7 +171,7 @@ async function updateRateLimitCounters(userId: string, accountId: string): Promi
 }
 
 /**
- * Post using unofficial API method
+ * Post using API method (OAuth or legacy cookies)
  */
 async function postViaApi(account: Account, post: Post): Promise<{
   success: boolean;
@@ -179,29 +182,51 @@ async function postViaApi(account: Account, post: Post): Promise<{
   console.log(`Content: ${post.content}`);
 
   try {
-    // Validate required credentials
-    if (!account.instagramToken || !account.instagramUserId) {
-      return {
-        success: false,
-        error: 'Instagram credentials not configured for this account',
-      };
-    }
+    let result: any;
 
-    // Call the actual posting API
-    const result = await postToThreadsApi(
-      account.instagramToken,
-      account.instagramUserId,
-      account.csrfToken || '',
-      account.igDid || '',
-      account.mid || '',
-      {
-        content: post.content,
-        media: post.media,
-        topics: post.topics,
-        settings: post.settings,
-      },
-      account.id
-    );
+    // Route to appropriate API based on auth method
+    if (account.authMethod === 'oauth' && account.accessToken) {
+      // Use official Threads API with OAuth token
+      console.log('Using official Threads API (OAuth)');
+      const { postToThreadsApiOfficial } = await import('./posting/threadsApiOfficial');
+
+      result = await postToThreadsApiOfficial(
+        account.accessToken,
+        account.threadsUserId!,
+        {
+          content: post.content,
+          media: post.media,
+          topics: post.topics,
+          settings: post.settings,
+        }
+      );
+    } else {
+      // Use legacy unofficial API with cookies (backward compatibility)
+      console.log('Using legacy unofficial API (cookies)');
+
+      // Validate legacy credentials
+      if (!account.instagramToken || !account.instagramUserId) {
+        return {
+          success: false,
+          error: 'Account credentials not configured. Please reconnect your account using OAuth.',
+        };
+      }
+
+      result = await postToThreadsApi(
+        account.instagramToken,
+        account.instagramUserId,
+        account.csrfToken || '',
+        account.igDid || '',
+        account.mid || '',
+        {
+          content: post.content,
+          media: post.media,
+          topics: post.topics,
+          settings: post.settings,
+        },
+        account.id
+      );
+    }
 
     return result;
   } catch (error: any) {

@@ -11,6 +11,7 @@ import { PostCalendar } from '@/pages/PostCalendar';
 import { Analytics } from '@/pages/Analytics';
 import { MediaLibrary } from '@/pages/MediaLibrary';
 import { Settings } from '@/pages/Settings';
+import { OAuthCallback } from '@/pages/OAuthCallback';
 
 function App() {
   return (
@@ -20,6 +21,16 @@ function App() {
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+
+          {/* OAuth callback - requires authentication */}
+          <Route
+            path="/oauth/callback"
+            element={
+              <ProtectedRoute>
+                <OAuthCallback />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Protected dashboard routes */}
           <Route

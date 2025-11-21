@@ -13,3 +13,6 @@ admin.initializeApp();
 export { processScheduledPosts, publishPostNow } from './scheduledPosts';
 export { instagramLogin } from './instagramAuth';
 export { publishPost } from './publishPost';
+
+// OAuth functions for official Threads API
+export { threadsOAuthCallback, refreshThreadsToken, autoRefreshTokens } from './threadsOAuth';
