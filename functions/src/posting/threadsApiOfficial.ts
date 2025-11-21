@@ -40,6 +40,48 @@ export async function postToThreadsApiOfficial(
     console.log('Posting to Threads via official API for user:', threadsUserId);
     console.log('Content:', postData.content);
 
+    // Validate content and media according to Threads API limits
+    // Reference: https://developers.facebook.com/docs/threads/posts
+    if (postData.content && postData.content.length > 500) {
+      return {
+        success: false,
+        error: 'Content exceeds 500 character limit',
+        timestamp: new Date(),
+      };
+    }
+
+    if (postData.media && postData.media.length > 0) {
+      const images = postData.media.filter(m => m.type === 'image');
+      const videos = postData.media.filter(m => m.type === 'video');
+
+      // Threads allows up to 20 images per post
+      if (images.length > 20) {
+        return {
+          success: false,
+          error: 'Maximum 20 images per post',
+          timestamp: new Date(),
+        };
+      }
+
+      // Threads allows 1 video per post
+      if (videos.length > 1) {
+        return {
+          success: false,
+          error: 'Maximum 1 video per post',
+          timestamp: new Date(),
+        };
+      }
+
+      // Cannot mix images and videos
+      if (images.length > 0 && videos.length > 0) {
+        return {
+          success: false,
+          error: 'Cannot mix images and videos in the same post',
+          timestamp: new Date(),
+        };
+      }
+    }
+
     // Step 1: Create media container
     const containerId = await createMediaContainer(accessToken, threadsUserId, postData);
 
@@ -312,5 +354,34 @@ export async function replyToThread(
       error: error.message,
       timestamp: new Date(),
     };
+  }
+}
+
+/**
+ * Check content publishing limit
+ * Threads allows up to 250 posts per 24 hours
+ * Returns quota information for the account
+ */
+export async function getContentPublishingLimit(
+  accessToken: string,
+  threadsUserId: string
+): Promise<any> {
+  try {
+    const fields = 'quota_usage,config';
+    const url = `https://graph.threads.net/v1.0/${threadsUserId}/threads_publishing_limit?fields=${fields}&access_token=${accessToken}`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to fetch publishing limit:', response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching publishing limit:', error);
+    return null;
   }
 }

@@ -50,11 +50,13 @@ interface Account {
 
 /**
  * Rate limiting configuration
+ * Threads API allows up to 250 posts per 24 hours
+ * Being conservative with hourly limits to avoid spammy behavior
  */
 const RATE_LIMITS = {
-  MAX_PER_HOUR: 3,
-  MAX_PER_DAY: 20,
-  MIN_DELAY_BETWEEN_POSTS: 15 * 60 * 1000, // 15 minutes
+  MAX_PER_HOUR: 10, // Conservative hourly limit
+  MAX_PER_DAY: 200, // Well under Threads' 250/day limit
+  MIN_DELAY_BETWEEN_POSTS: 5 * 60 * 1000, // 5 minutes (more reasonable)
 };
 
 /**
