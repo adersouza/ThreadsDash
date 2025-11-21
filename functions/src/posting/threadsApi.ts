@@ -225,13 +225,49 @@ export async function postToThreadsApi(
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
         'Authorization': `Bearer IGT:2:${token}`,
+        'Cookie': `sessionid=${token}; ds_user_id=${instagramUserId}`,
         'X-IG-App-ID': '238260118697367',
         'X-ASBD-ID': '359341',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Origin': 'https://www.threads.net',
+        'Referer': 'https://www.threads.net/',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'X-Instagram-AJAX': '1',
+        'X-Requested-With': 'XMLHttpRequest',
       },
       body: new URLSearchParams(apiData).toString(),
     });
 
-    const data = await response.json();
+    // Log response status for debugging
+    console.log(`Threads API response status: ${response.status}`);
+
+    // Check if response is OK
+    if (!response.ok) {
+      const responseText = await response.text();
+      console.error(`Threads API error (${response.status}):`, responseText.substring(0, 500));
+
+      return {
+        success: false,
+        error: `Threads API returned ${response.status}: ${response.statusText}. Your session may have expired. Please re-add your account with fresh credentials.`,
+        timestamp: new Date(),
+      };
+    }
+
+    // Try to parse JSON response
+    let data: any;
+    try {
+      const responseText = await response.text();
+      console.log('Threads API response:', responseText.substring(0, 500));
+      data = JSON.parse(responseText);
+    } catch (jsonError) {
+      console.error('Failed to parse Threads API response as JSON:', jsonError);
+      return {
+        success: false,
+        error: 'Invalid response from Threads API. Your session may have expired.',
+        timestamp: new Date(),
+      };
+    }
 
     if (data.status === 'ok' && data.media) {
       rateLimiter.recordRequest(accountId);
