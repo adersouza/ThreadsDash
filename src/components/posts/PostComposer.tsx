@@ -289,6 +289,11 @@ export const PostComposer = ({
           media: [],
           status: 'published',
           scheduledFor: null,
+          topics: data.topics || [],
+          settings: {
+            whoCanReply: data.whoCanReply || 'everyone',
+            allowReplies: data.allowReplies !== false,
+          },
         };
 
         const result = await postToThreadsUnofficial(accountData, postPayload);
