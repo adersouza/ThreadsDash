@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
 import { collection, addDoc, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
-import { encryptSync } from '@/services/encryption';
+import { encryptSync, encrypt } from '@/services/encryption';
 import {
   Dialog,
   DialogContent,

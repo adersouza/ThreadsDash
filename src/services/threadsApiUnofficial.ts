@@ -12,7 +12,7 @@
 
 import type { ThreadsAccount, PostingResult } from '@/types';
 import type { Post } from '@/types/post';
-import { decrypt } from './encryption';
+import { decrypt, decryptSync } from './encryption';
 import { authenticator } from 'otplib';
 
 interface InstagramLoginResponse {

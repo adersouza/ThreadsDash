@@ -304,7 +304,7 @@ export const PostComposer = ({
       try {
         // Call the Cloud Function to publish the post
         const publishPostFn = httpsCallable(functions, 'publishPost');
-        const result = await publishPostFn({
+        await publishPostFn({
           postId,
           postingMethod: data.postingMethod || selectedAccount.postingMethod || 'api'
         });

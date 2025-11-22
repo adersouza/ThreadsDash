@@ -13,3 +13,4 @@ admin.initializeApp();
 export { processScheduledPosts, publishPostNow } from './scheduledPosts';
 export { instagramLogin } from './instagramAuth';
 export { publishPost } from './publishPost';
+export { exchangeThreadsToken } from './auth/threadsOAuth';

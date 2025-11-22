@@ -11,6 +11,9 @@ import { PostCalendar } from '@/pages/PostCalendar';
 import { Analytics } from '@/pages/Analytics';
 import { MediaLibrary } from '@/pages/MediaLibrary';
 import { Settings } from '@/pages/Settings';
+import { Privacy } from '@/pages/Privacy';
+import { Terms } from '@/pages/Terms';
+import { ThreadsCallback } from '@/pages/ThreadsCallback';
 
 function App() {
   return (
@@ -20,6 +23,9 @@ function App() {
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/auth/threads/callback" element={<ThreadsCallback />} />
 
           {/* Protected dashboard routes */}
           <Route
