@@ -210,11 +210,50 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="single" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="single">Single Account</TabsTrigger>
-            <TabsTrigger value="bulk">Bulk Import (CSV)</TabsTrigger>
+        <Tabs defaultValue="oauth" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="oauth">OAuth (Recommended)</TabsTrigger>
+            <TabsTrigger value="single">Manual (Cookies)</TabsTrigger>
+            <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
           </TabsList>
+
+          {/* OAuth Tab */}
+          <TabsContent value="oauth" className="space-y-4">
+            <div className="py-6 space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Official Threads API (Recommended)</strong>
+                  <p className="mt-2">Connect your Threads account securely using the official Meta OAuth flow. This method:</p>
+                  <ul className="list-disc list-inside mt-2 space-y-1">
+                    <li>Is more secure and reliable</li>
+                    <li>Doesn't require manual cookie extraction</li>
+                    <li>Provides long-lived access tokens (60 days)</li>
+                    <li>Follows Meta's best practices</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex flex-col items-center justify-center space-y-4 py-8">
+                <Button
+                  size="lg"
+                  onClick={() => {
+                    const authUrl = new URL('https://threads.net/oauth/authorize');
+                    authUrl.searchParams.set('client_id', '1620825335945838');
+                    authUrl.searchParams.set('redirect_uri', 'https://threadsdash.web.app/auth/threads/callback');
+                    authUrl.searchParams.set('scope', 'threads_basic,threads_content_publish,threads_manage_insights');
+                    authUrl.searchParams.set('response_type', 'code');
+                    window.location.href = authUrl.toString();
+                  }}
+                >
+                  Connect with Threads
+                </Button>
+                <p className="text-sm text-muted-foreground text-center">
+                  You'll be redirected to Threads to authorize this app
+                </p>
+              </div>
+            </div>
+          </TabsContent>
 
           {/* Single Account Tab */}
           <TabsContent value="single">

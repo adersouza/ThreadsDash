@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import fetch from 'node-fetch';
+import { encrypt } from '../encryption';
 
 const THREADS_APP_ID = '1620825335945838';
 const THREADS_APP_SECRET = functions.config().threads?.app_secret || process.env.THREADS_APP_SECRET;
@@ -88,7 +89,10 @@ export const exchangeThreadsToken = functions.https.onCall(async (data, context)
       throw new functions.https.HttpsError('internal', 'Failed to fetch user profile');
     }
 
-    // Step 4: Store account in Firestore
+    // Step 4: Encrypt access token before storing
+    const encryptedAccessToken = await encrypt(accessToken);
+
+    // Step 5: Store account in Firestore
     const userId = context.auth.uid;
     const accountRef = admin.firestore()
       .collection('users')
@@ -102,7 +106,7 @@ export const exchangeThreadsToken = functions.https.onCall(async (data, context)
       avatarUrl: profileData.threads_profile_picture_url || null,
       postingMethod: 'official', // Mark as official API
       threadsUserId: threadsUserId,
-      threadsAccessToken: accessToken,
+      threadsAccessToken: encryptedAccessToken,
       tokenExpiresAt: admin.firestore.Timestamp.fromDate(
         new Date(Date.now() + expiresIn * 1000)
       ),

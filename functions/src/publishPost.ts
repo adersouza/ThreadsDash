@@ -23,23 +23,23 @@ export const publishPost = functions.https.onCall(async (data, context) => {
   const selectedMethod = postingMethod || 'api';
 
   try {
-    // Import the posting function from threadsApi
-    const { postToThreadsApi } = await import('./posting/threadsApi');
-    
+    // Import the posting functions from threadsApi
+    const { postToThreadsApi, postToThreadsOfficialApi } = await import('./posting/threadsApi');
+
     // Get post document
     const postRef = db.collection('users').doc(userId).collection('posts').doc(postId);
     const postDoc = await postRef.get();
-    
+
     if (!postDoc.exists) {
       throw new functions.https.HttpsError('not-found', 'Post not found');
     }
 
     const post = postDoc.data();
-    
+
     // Get account document
     const accountRef = db.collection('users').doc(userId).collection('accounts').doc(post!.accountId);
     const accountDoc = await accountRef.get();
-    
+
     if (!accountDoc.exists) {
       throw new functions.https.HttpsError('not-found', 'Account not found');
     }
@@ -62,30 +62,41 @@ export const publishPost = functions.https.onCall(async (data, context) => {
       );
     }
 
-    // Validate API method credentials
-    if (selectedMethod === 'api') {
-      if (!account.instagramToken || !account.instagramUserId) {
-        await postRef.update({
-          status: 'failed',
-          error: 'Instagram credentials not configured. Please add your Instagram token in account settings.',
-        });
-        throw new functions.https.HttpsError(
-          'failed-precondition',
-          'Instagram credentials not configured. Please add your Instagram token in account settings.'
-        );
-      }
-    }
+    // Determine which API method to use
+    let result;
 
-    // Post to Threads via API
-    const result = await postToThreadsApi(
-      account.instagramToken,
-      account.instagramUserId,
-      account.csrfToken || '',
-      account.igDid || '',
-      account.mid || '',
-      post as any,
-      accountDoc.id
-    );
+    if (account.postingMethod === 'official' && account.threadsAccessToken && account.threadsUserId) {
+      // Use official Threads API
+      console.log('Using official Threads API for posting');
+      result = await postToThreadsOfficialApi(
+        account.threadsAccessToken,
+        account.threadsUserId,
+        post as any,
+        accountDoc.id
+      );
+    } else if (account.instagramToken && account.instagramUserId) {
+      // Use unofficial API with cookie-based auth
+      console.log('Using unofficial Threads API for posting');
+      result = await postToThreadsApi(
+        account.instagramToken,
+        account.instagramUserId,
+        account.csrfToken || '',
+        account.igDid || '',
+        account.mid || '',
+        post as any,
+        accountDoc.id
+      );
+    } else {
+      // No valid credentials
+      await postRef.update({
+        status: 'failed',
+        error: 'No valid credentials configured. Please reconnect your account.',
+      });
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'No valid credentials configured. Please reconnect your account.'
+      );
+    }
 
     if (result.success) {
       // Update post status

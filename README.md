@@ -8,9 +8,10 @@ A comprehensive dashboard for managing and scheduling Threads posts with analyti
 ✅ **Post Scheduling** - Calendar and list view with scheduling
 ✅ **Post Composer** - Rich editor with media upload and settings
 ✅ **Analytics** - Follower growth, engagement metrics, optimal posting times
-✅ **Dual Posting Methods**:
-- Browser automation via AdsPower (safest)
-- Unofficial Instagram/Threads API (fastest)
+✅ **Multiple Posting Methods**:
+- **Official Threads API via OAuth** (recommended, most reliable)
+- Unofficial Instagram/Threads API with cookies
+- Browser automation via AdsPower (enterprise option)
 
 ## Tech Stack
 
@@ -42,6 +43,40 @@ npm run build
    cd functions && npm install
    firebase deploy --only functions
    ```
+
+## Threads OAuth Setup (Recommended)
+
+To enable the official Threads API OAuth flow:
+
+1. **Create Meta App**
+   - Go to https://developers.facebook.com
+   - Create a new app and add Threads API product
+   - Note your App ID and Threads App ID
+
+2. **Configure OAuth Settings**
+   - Add redirect URI: `https://your-domain.web.app/auth/threads/callback`
+   - Request permissions: `threads_basic`, `threads_content_publish`, `threads_manage_insights`
+
+3. **Set Cloud Function Environment Variable**
+   ```bash
+   firebase functions:config:set threads.app_secret="YOUR_THREADS_APP_SECRET"
+   firebase deploy --only functions
+   ```
+
+   Or set in `.env` for local development:
+   ```bash
+   THREADS_APP_SECRET=your_app_secret_here
+   ```
+
+4. **Update App Configuration** (if different from defaults)
+   - Edit `functions/src/auth/threadsOAuth.ts`
+   - Update `THREADS_APP_ID` and `REDIRECT_URI` if needed
+
+5. **Connect Account**
+   - Open your dashboard
+   - Click "Add Account"
+   - Select "OAuth (Recommended)" tab
+   - Click "Connect with Threads"
 
 ## Rate Limiting
 

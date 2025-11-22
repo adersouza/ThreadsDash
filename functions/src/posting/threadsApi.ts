@@ -139,6 +139,150 @@ async function uploadMedia(
 }
 
 /**
+ * Post to Threads using official API
+ */
+export async function postToThreadsOfficialApi(
+  accessToken: string,
+  threadsUserId: string,
+  postData: PostData,
+  accountId: string
+): Promise<PostingResult> {
+  const rateLimiter = RateLimiter.getInstance();
+
+  // Check rate limit
+  if (!rateLimiter.canMakeRequest(accountId, 3)) {
+    const nextAvailable = rateLimiter.getNextAvailableTime(accountId, 3);
+    return {
+      success: false,
+      error: `Rate limit exceeded. Next available: ${nextAvailable?.toLocaleString()}`,
+      timestamp: new Date(),
+    };
+  }
+
+  try {
+    const token = await decrypt(accessToken);
+
+    // Step 1: Create media container if there's media
+    let mediaContainerId: string | undefined;
+    if (postData.media && postData.media.length > 0) {
+      const firstMedia = postData.media[0];
+      const mediaType = firstMedia.type || 'image';
+
+      // Create media container
+      const containerParams = new URLSearchParams({
+        media_type: mediaType === 'image' ? 'IMAGE' : 'VIDEO',
+        image_url: mediaType === 'image' ? firstMedia.url : undefined as any,
+        video_url: mediaType === 'video' ? firstMedia.url : undefined as any,
+        access_token: token,
+      });
+
+      // Remove undefined params
+      Array.from(containerParams.entries()).forEach(([key, value]) => {
+        if (value === 'undefined') containerParams.delete(key);
+      });
+
+      const containerResponse = await fetch(
+        `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
+        {
+          method: 'POST',
+          body: containerParams,
+        }
+      );
+
+      const containerData = await containerResponse.json();
+      if (!containerResponse.ok || !containerData.id) {
+        console.error('Media container creation error:', containerData);
+        return {
+          success: false,
+          error: containerData.error?.message || 'Failed to create media container',
+          timestamp: new Date(),
+        };
+      }
+
+      mediaContainerId = containerData.id;
+    }
+
+    // Step 2: Create text post or publish media container
+    const postParams = new URLSearchParams({
+      text: postData.content,
+      access_token: token,
+    });
+
+    if (mediaContainerId) {
+      postParams.append('media_id', mediaContainerId);
+    }
+
+    // Add reply settings if specified
+    if (postData.settings?.whoCanReply && postData.settings.whoCanReply !== 'everyone') {
+      postParams.append('reply_control',
+        postData.settings.whoCanReply === 'followers' ? 'accounts_you_follow' : 'mentioned_only'
+      );
+    }
+
+    const postResponse = await fetch(
+      `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
+      {
+        method: 'POST',
+        body: postParams,
+      }
+    );
+
+    const postData2 = await postResponse.json();
+
+    if (!postResponse.ok || !postData2.id) {
+      console.error('Post creation error:', postData2);
+      return {
+        success: false,
+        error: postData2.error?.message || 'Failed to create post',
+        timestamp: new Date(),
+      };
+    }
+
+    const creationId = postData2.id;
+
+    // Step 3: Publish the post
+    const publishParams = new URLSearchParams({
+      creation_id: creationId,
+      access_token: token,
+    });
+
+    const publishResponse = await fetch(
+      `https://graph.threads.net/v1.0/${threadsUserId}/threads_publish`,
+      {
+        method: 'POST',
+        body: publishParams,
+      }
+    );
+
+    const publishData = await publishResponse.json();
+
+    if (!publishResponse.ok || !publishData.id) {
+      console.error('Post publish error:', publishData);
+      return {
+        success: false,
+        error: publishData.error?.message || 'Failed to publish post',
+        timestamp: new Date(),
+      };
+    }
+
+    rateLimiter.recordRequest(accountId);
+
+    return {
+      success: true,
+      threadId: publishData.id,
+      timestamp: new Date(),
+    };
+  } catch (error: any) {
+    console.error('Official Threads API posting error:', error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error',
+      timestamp: new Date(),
+    };
+  }
+}
+
+/**
  * Post to Threads using unofficial API
  */
 export async function postToThreadsApi(
