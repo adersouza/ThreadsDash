@@ -202,7 +202,10 @@ export async function postToThreadsOfficialApi(
       `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
       {
         method: 'POST',
-        body: postParams,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: postParams.toString(),
       }
     );
 
@@ -232,7 +235,10 @@ export async function postToThreadsOfficialApi(
       `https://graph.threads.net/v1.0/${threadsUserId}/threads_publish`,
       {
         method: 'POST',
-        body: publishParams,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: publishParams.toString(),
       }
     );
 
