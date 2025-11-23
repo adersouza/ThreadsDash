@@ -162,60 +162,27 @@ export async function postToThreadsOfficialApi(
   try {
     const token = await decrypt(accessToken);
 
-    // Step 1: Create media container if there's media
-    let mediaContainerId: string | undefined;
-    if (postData.media && postData.media.length > 0) {
-      const firstMedia = postData.media[0];
-      const mediaType = firstMedia.type || 'image';
-
-      // Create media container
-      const containerParams = new URLSearchParams({
-        media_type: mediaType === 'image' ? 'IMAGE' : 'VIDEO',
-        image_url: mediaType === 'image' ? firstMedia.url : undefined as any,
-        video_url: mediaType === 'video' ? firstMedia.url : undefined as any,
-        access_token: token,
-      });
-
-      // Remove undefined params
-      Array.from(containerParams.entries()).forEach(([key, value]) => {
-        if (value === 'undefined') containerParams.delete(key);
-      });
-
-      const containerResponse = await fetch(
-        `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
-        {
-          method: 'POST',
-          body: containerParams,
-        }
-      );
-
-      const containerData = await containerResponse.json();
-      if (!containerResponse.ok || !containerData.id) {
-        console.error('Media container creation error:', containerData);
-        return {
-          success: false,
-          error: containerData.error?.message || 'Failed to create media container',
-          timestamp: new Date(),
-        };
-      }
-
-      mediaContainerId = containerData.id;
-    }
-
-    // Step 2: Create threads container
+    // Step 1: Create threads container with all parameters
     const postParams = new URLSearchParams({
-      media_type: mediaContainerId ? undefined as any : 'TEXT', // TEXT for text-only posts
       text: postData.content,
       access_token: token,
     });
 
-    // Remove undefined params
-    Array.from(postParams.entries()).forEach(([key, value]) => {
-      if (value === 'undefined') postParams.delete(key);
-    });
+    // Determine media type and add media URL if present
+    if (postData.media && postData.media.length > 0) {
+      const firstMedia = postData.media[0];
+      const mediaType = firstMedia.type || 'image';
 
-    if (mediaContainerId) {
-      postParams.append('image_url', mediaContainerId);
+      if (mediaType === 'image') {
+        postParams.append('media_type', 'IMAGE');
+        postParams.append('image_url', firstMedia.url);
+      } else if (mediaType === 'video') {
+        postParams.append('media_type', 'VIDEO');
+        postParams.append('video_url', firstMedia.url);
+      }
+    } else {
+      // Text-only post
+      postParams.append('media_type', 'TEXT');
     }
 
     // Add reply settings if specified
@@ -224,6 +191,8 @@ export async function postToThreadsOfficialApi(
         postData.settings.whoCanReply === 'followers' ? 'accounts_you_follow' : 'mentioned_only'
       );
     }
+
+    console.log('Creating Threads container with params:', Object.fromEntries(postParams.entries()));
 
     const postResponse = await fetch(
       `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
@@ -234,23 +203,26 @@ export async function postToThreadsOfficialApi(
     );
 
     const postData2 = await postResponse.json();
+    console.log('Container creation response:', postData2);
 
     if (!postResponse.ok || !postData2.id) {
       console.error('Post creation error:', postData2);
       return {
         success: false,
-        error: postData2.error?.message || 'Failed to create post',
+        error: postData2.error?.message || 'Failed to create post container',
         timestamp: new Date(),
       };
     }
 
     const creationId = postData2.id;
 
-    // Step 3: Publish the post
+    // Step 2: Publish the post
     const publishParams = new URLSearchParams({
       creation_id: creationId,
       access_token: token,
     });
+
+    console.log('Publishing post with creation_id:', creationId);
 
     const publishResponse = await fetch(
       `https://graph.threads.net/v1.0/${threadsUserId}/threads_publish`,
@@ -261,6 +233,7 @@ export async function postToThreadsOfficialApi(
     );
 
     const publishData = await publishResponse.json();
+    console.log('Publish response:', publishData);
 
     if (!publishResponse.ok || !publishData.id) {
       console.error('Post publish error:', publishData);
