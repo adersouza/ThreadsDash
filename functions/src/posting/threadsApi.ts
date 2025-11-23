@@ -73,6 +73,50 @@ class RateLimiter {
 }
 
 /**
+ * Sleep helper for retry delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Retry helper with exponential backoff for transient errors
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 2000
+): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+
+      // Check if error is transient
+      const isTransient = error.isTransient === true ||
+                         error.error?.is_transient === true;
+
+      // If not transient or last attempt, throw
+      if (!isTransient || attempt === maxRetries) {
+        throw error;
+      }
+
+      // Calculate delay with exponential backoff
+      const delay = baseDelay * Math.pow(2, attempt);
+      console.log(`Transient error detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+      console.log('Error details:', JSON.stringify(error, null, 2));
+
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
+
+/**
  * Upload media to Threads
  */
 async function uploadMedia(
@@ -198,32 +242,36 @@ export async function postToThreadsOfficialApi(
 
     console.log('Creating Threads container with params:', Object.fromEntries(postParams.entries()));
 
-    const postResponse = await fetch(
-      `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: postParams.toString(),
+    // Step 1: Create container with retry logic for transient errors
+    const creationId = await retryWithBackoff(async () => {
+      const postResponse = await fetch(
+        `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: postParams.toString(),
+        }
+      );
+
+      const postData2 = await postResponse.json();
+      console.log('Container creation response:', postData2);
+
+      if (!postResponse.ok || !postData2.id) {
+        console.error('Post creation error:', postData2);
+
+        // Throw error with is_transient flag for retry logic
+        const error: any = new Error(postData2.error?.message || 'Failed to create post container');
+        error.error = postData2.error;
+        error.isTransient = postData2.error?.is_transient === true;
+        throw error;
       }
-    );
 
-    const postData2 = await postResponse.json();
-    console.log('Container creation response:', postData2);
+      return postData2.id;
+    });
 
-    if (!postResponse.ok || !postData2.id) {
-      console.error('Post creation error:', postData2);
-      return {
-        success: false,
-        error: postData2.error?.message || 'Failed to create post container',
-        timestamp: new Date(),
-      };
-    }
-
-    const creationId = postData2.id;
-
-    // Step 2: Publish the post
+    // Step 2: Publish the post with retry logic for transient errors
     const publishParams = new URLSearchParams({
       creation_id: creationId,
       access_token: token,
@@ -231,41 +279,53 @@ export async function postToThreadsOfficialApi(
 
     console.log('Publishing post with creation_id:', creationId);
 
-    const publishResponse = await fetch(
-      `https://graph.threads.net/v1.0/${threadsUserId}/threads_publish`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: publishParams.toString(),
+    const threadId = await retryWithBackoff(async () => {
+      const publishResponse = await fetch(
+        `https://graph.threads.net/v1.0/${threadsUserId}/threads_publish`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: publishParams.toString(),
+        }
+      );
+
+      const publishData = await publishResponse.json();
+      console.log('Publish response:', publishData);
+
+      if (!publishResponse.ok || !publishData.id) {
+        console.error('Post publish error:', publishData);
+
+        // Throw error with is_transient flag for retry logic
+        const error: any = new Error(publishData.error?.message || 'Failed to publish post');
+        error.error = publishData.error;
+        error.isTransient = publishData.error?.is_transient === true;
+        throw error;
       }
-    );
 
-    const publishData = await publishResponse.json();
-    console.log('Publish response:', publishData);
-
-    if (!publishResponse.ok || !publishData.id) {
-      console.error('Post publish error:', publishData);
-      return {
-        success: false,
-        error: publishData.error?.message || 'Failed to publish post',
-        timestamp: new Date(),
-      };
-    }
+      return publishData.id;
+    });
 
     rateLimiter.recordRequest(accountId);
 
     return {
       success: true,
-      threadId: publishData.id,
+      threadId,
       timestamp: new Date(),
     };
   } catch (error: any) {
     console.error('Official Threads API posting error:', error);
+
+    // Provide more context for transient errors that failed after retries
+    let errorMessage = error.message || 'Unknown error';
+    if (error.isTransient || error.error?.is_transient) {
+      errorMessage = `Transient error after retries: ${errorMessage}. The Threads API is experiencing temporary issues. Please try again in a few minutes.`;
+    }
+
     return {
       success: false,
-      error: error.message || 'Unknown error',
+      error: errorMessage,
       timestamp: new Date(),
     };
   }
