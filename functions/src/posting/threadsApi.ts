@@ -202,14 +202,20 @@ export async function postToThreadsOfficialApi(
       mediaContainerId = containerData.id;
     }
 
-    // Step 2: Create text post or publish media container
+    // Step 2: Create threads container
     const postParams = new URLSearchParams({
+      media_type: mediaContainerId ? undefined as any : 'TEXT', // TEXT for text-only posts
       text: postData.content,
       access_token: token,
     });
 
+    // Remove undefined params
+    Array.from(postParams.entries()).forEach(([key, value]) => {
+      if (value === 'undefined') postParams.delete(key);
+    });
+
     if (mediaContainerId) {
-      postParams.append('media_id', mediaContainerId);
+      postParams.append('image_url', mediaContainerId);
     }
 
     // Add reply settings if specified
