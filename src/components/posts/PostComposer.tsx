@@ -49,7 +49,7 @@ const postSchema = z.object({
   scheduledFor: z.date().optional(),
   whoCanReply: z.enum(['everyone', 'followers', 'mentioned']),
   allowReplies: z.boolean(),
-  postingMethod: z.enum(['browser', 'api']).optional(),
+  postingMethod: z.enum(['official', 'api', 'browser']).optional(),
 });
 
 type PostFormData = z.infer<typeof postSchema>;
@@ -561,6 +561,15 @@ export const PostComposer = ({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="official">
+                          <div className="flex items-center gap-2">
+                            <Zap className="h-4 w-4 text-green-500" />
+                            <div>
+                              <div className="font-medium">Official API (OAuth)</div>
+                              <div className="text-xs text-muted-foreground">Recommended - Secure & reliable</div>
+                            </div>
+                          </div>
+                        </SelectItem>
                         <SelectItem value="api">
                           <div className="flex items-center gap-2">
                             <Zap className="h-4 w-4" />
@@ -584,9 +593,11 @@ export const PostComposer = ({
                   )}
                 />
                 <p className="text-sm text-muted-foreground">
-                  {watchedFields.postingMethod === 'browser' ?
-                    'Browser method requires a separate posting server with AdsPower' :
-                    'API method is fast but uses unofficial endpoints'
+                  {watchedFields.postingMethod === 'official' ?
+                    'Official API uses OAuth - most secure and reliable method' :
+                    watchedFields.postingMethod === 'browser' ?
+                      'Browser method requires a separate posting server with AdsPower' :
+                      'API method is fast but uses unofficial endpoints'
                   }
                 </p>
               </div>
