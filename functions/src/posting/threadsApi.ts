@@ -160,7 +160,11 @@ export async function postToThreadsOfficialApi(
   }
 
   try {
+    console.log('postToThreadsOfficialApi called with threadsUserId:', threadsUserId);
+    console.log('postData:', JSON.stringify(postData, null, 2));
+
     const token = await decrypt(accessToken);
+    console.log('Token decrypted successfully, length:', token?.length);
 
     // Step 1: Create threads container with all parameters
     const postParams = new URLSearchParams({

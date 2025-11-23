@@ -68,6 +68,18 @@ export const publishPost = functions.https.onCall(async (data, context) => {
     if (account.postingMethod === 'official' && account.threadsAccessToken && account.threadsUserId) {
       // Use official Threads API
       console.log('Using official Threads API for posting');
+      console.log('Account data:', {
+        username: account.username,
+        threadsUserId: account.threadsUserId,
+        hasAccessToken: !!account.threadsAccessToken,
+        postingMethod: account.postingMethod
+      });
+      console.log('Post data:', {
+        content: post!.content,
+        mediaCount: post!.media?.length || 0,
+        topics: post!.topics
+      });
+
       result = await postToThreadsOfficialApi(
         account.threadsAccessToken,
         account.threadsUserId,
