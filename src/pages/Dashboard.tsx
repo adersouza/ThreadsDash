@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAccountStore } from '@/store/accountStore';
 import { usePostStore } from '@/store/postStore';
+import { useModelStore } from '@/store/modelStore';
 import { useAccounts } from '@/hooks/useAccounts';
 import { usePosts } from '@/hooks/usePosts';
+import { useModels } from '@/hooks/useModels';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { AccountCard } from '@/components/dashboard/AccountCard';
+import { ModelFilter } from '@/components/dashboard/ModelFilter';
 import { PostComposer } from '@/components/posts/PostComposer';
 import { AccountModal } from '@/components/dashboard/AccountModal';
 import { Plus, Loader2, FileText, Calendar, Edit } from 'lucide-react';
@@ -14,10 +17,20 @@ import { Plus, Loader2, FileText, Calendar, Edit } from 'lucide-react';
 export const Dashboard = () => {
   const { accounts, loading, error } = useAccountStore();
   const { posts } = usePostStore();
+  const { selectedModelId } = useModelStore();
   const { isInitialized } = useAccounts();
   usePosts();
+  useModels(); // Load models from Firestore
   const [composerOpen, setComposerOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+
+  // Filter accounts by selected model
+  const filteredAccounts = useMemo(() => {
+    if (selectedModelId === null) {
+      return accounts; // Show all accounts
+    }
+    return accounts.filter((acc) => acc.modelIds?.includes(selectedModelId));
+  }, [accounts, selectedModelId]);
 
   // Calculate post stats
   const today = new Date();
@@ -66,23 +79,28 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Manage and monitor your Threads accounts
-          </p>
-        </div>
-        <Button onClick={() => setAccountModalOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Account
-        </Button>
-      </div>
+    <div className="flex gap-6">
+      {/* Sidebar */}
+      <ModelFilter />
 
-      {/* Stats Overview */}
-      <StatsOverview accounts={accounts} />
+      {/* Main Content */}
+      <div className="flex-1 space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground">
+              Manage and monitor your Threads accounts
+            </p>
+          </div>
+          <Button onClick={() => setAccountModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Account
+          </Button>
+        </div>
+
+        {/* Stats Overview */}
+        <StatsOverview accounts={filteredAccounts} />
 
       {/* Post Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -124,24 +142,24 @@ export const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Accounts Section */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-semibold">Accounts</h2>
-          {accounts.length > 0 && (
-            <span className="text-sm text-muted-foreground">
-              {accounts.length} account{accounts.length !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-
-        {accounts.length > 0 ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {accounts.map((account) => (
-              <AccountCard key={account.id} account={account} />
-            ))}
+        {/* Accounts Section */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-semibold">Accounts</h2>
+            {filteredAccounts.length > 0 && (
+              <span className="text-sm text-muted-foreground">
+                {filteredAccounts.length} account{filteredAccounts.length !== 1 ? 's' : ''}
+              </span>
+            )}
           </div>
-        ) : (
+
+          {filteredAccounts.length > 0 ? (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredAccounts.map((account) => (
+                <AccountCard key={account.id} account={account} />
+              ))}
+            </div>
+          ) : (
           <Card>
             <CardHeader>
               <CardTitle>No Accounts Connected</CardTitle>
@@ -159,22 +177,23 @@ export const Dashboard = () => {
                 Connect Your First Account
               </Button>
             </CardContent>
-          </Card>
-        )}
+            </Card>
+          )}
+        </div>
+
+        {/* Floating Action Button for Create Post */}
+        <Button
+          size="lg"
+          className="fixed bottom-8 right-8 h-14 w-14 rounded-full shadow-lg"
+          onClick={() => setComposerOpen(true)}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+
+        {/* Modals */}
+        <PostComposer open={composerOpen} onOpenChange={setComposerOpen} />
+        <AccountModal open={accountModalOpen} onOpenChange={setAccountModalOpen} />
       </div>
-
-      {/* Floating Action Button for Create Post */}
-      <Button
-        size="lg"
-        className="fixed bottom-8 right-8 h-14 w-14 rounded-full shadow-lg"
-        onClick={() => setComposerOpen(true)}
-      >
-        <Plus className="h-6 w-6" />
-      </Button>
-
-      {/* Modals */}
-      <PostComposer open={composerOpen} onOpenChange={setComposerOpen} />
-      <AccountModal open={accountModalOpen} onOpenChange={setAccountModalOpen} />
     </div>
   );
 };

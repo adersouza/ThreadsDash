@@ -52,14 +52,14 @@ export const useAccounts = () => {
             status: data.status || 'active',
             accessToken: data.accessToken,
             refreshToken: data.refreshToken,
-            postingMethod: data.postingMethod || 'browser',
-            instagramToken: data.instagramToken,
-            instagramUserId: data.instagramUserId,
-            adsPowerProfileId: data.adsPowerProfileId,
+            threadsAccessToken: data.threadsAccessToken,
+            threadsUserId: data.threadsUserId,
+            tokenExpiresAt: data.tokenExpiresAt?.toDate(),
             lastPostAt: data.lastPostAt?.toDate(),
             postsLastHour: data.postsLastHour,
             postsToday: data.postsToday,
             rateLimitResetAt: data.rateLimitResetAt?.toDate(),
+            modelIds: data.modelIds || [],
           });
         });
 

@@ -1,5 +1,4 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Clock, TrendingUp } from 'lucide-react';
 import type { OptimalTimeSlot } from '@/types/analytics';
 
@@ -72,9 +71,6 @@ export const OptimalTimes = ({ timeSlots, title = 'Best Times to Post' }: Optima
             );
           })}
         </div>
-        <Button variant="outline" className="w-full mt-6">
-          Schedule at Optimal Time
-        </Button>
       </CardContent>
     </Card>
   );

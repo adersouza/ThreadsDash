@@ -63,7 +63,6 @@ export const exchangeThreadsToken = functions.https.onCall(async (data, context)
     }
 
     const shortLivedToken = tokenData.access_token;
-    const threadsUserId = tokenData.user_id;
 
     // Step 2: Exchange short-lived token for long-lived token (60 days)
     const longLivedUrl = `https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret=${THREADS_APP_SECRET}&access_token=${shortLivedToken}`;
@@ -89,6 +88,9 @@ export const exchangeThreadsToken = functions.https.onCall(async (data, context)
       throw new functions.https.HttpsError('internal', 'Failed to fetch user profile');
     }
 
+    console.log('Profile data:', JSON.stringify(profileData));
+    console.log('Using Threads User ID from profile:', profileData.id);
+
     // Step 4: Encrypt access token before storing
     const encryptedAccessToken = await encrypt(accessToken);
 
@@ -105,7 +107,7 @@ export const exchangeThreadsToken = functions.https.onCall(async (data, context)
       displayName: profileData.username,
       avatarUrl: profileData.threads_profile_picture_url || null,
       postingMethod: 'official', // Mark as official API
-      threadsUserId: threadsUserId,
+      threadsUserId: profileData.id,
       threadsAccessToken: encryptedAccessToken,
       tokenExpiresAt: admin.firestore.Timestamp.fromDate(
         new Date(Date.now() + expiresIn * 1000)

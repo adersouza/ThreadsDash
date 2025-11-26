@@ -19,10 +19,20 @@ service cloud.firestore {
       // Accounts subcollection
       match /accounts/{accountId} {
         allow read, write: if isOwner(userId);
+
+        // Analytics subcollection for each account
+        match /analytics/{analyticsId} {
+          allow read, write: if isOwner(userId);
+        }
       }
 
       // Posts subcollection
       match /posts/{postId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Models subcollection
+      match /models/{modelId} {
         allow read, write: if isOwner(userId);
       }
 

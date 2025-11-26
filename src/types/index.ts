@@ -7,6 +7,17 @@ export interface User {
   createdAt: Date;
 }
 
+// Model Types (for grouping accounts)
+export interface Model {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  color?: string; // Hex color for visual identification
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Threads Account Types
 export interface ThreadsAccount {
   id: string;
@@ -25,12 +36,10 @@ export interface ThreadsAccount {
   accessToken?: string; // Encrypted access token for Threads API
   refreshToken?: string; // Encrypted refresh token
 
-  // Posting Method Configuration
-  postingMethod: 'browser' | 'api'; // Choose between browser automation or API
-  instagramToken?: string; // Encrypted Instagram token for unofficial API method
-  instagramUserId?: string; // Instagram user ID
-  twoFactorSecret?: string; // Encrypted 2FA secret for automatic TOTP code generation
-  adsPowerProfileId?: string; // AdsPower profile ID for browser automation
+  // OAuth Credentials (Official Threads API)
+  threadsAccessToken?: string; // Encrypted Threads access token
+  threadsUserId?: string; // Threads user ID
+  tokenExpiresAt?: Date; // When the access token expires
   lastPostAt?: Date; // Last time a post was published (for rate limiting)
 
   // Rate Limiting Tracking
@@ -42,6 +51,9 @@ export interface ThreadsAccount {
   baselineFollowersCount?: number; // Initial follower count when account was added
   baselineFollowingCount?: number; // Initial following count when account was added
   baselinePostsCount?: number; // Initial posts count when account was added
+
+  // Model Association
+  modelIds?: string[]; // Array of model IDs this account belongs to
 }
 
 // Post Types
@@ -223,9 +235,3 @@ export interface RateLimitInfo {
   postsRemainingToday: number;
 }
 
-export interface AdsPowerProfile {
-  id: string;
-  name: string;
-  browserType: string;
-  status: 'active' | 'inactive';
-}

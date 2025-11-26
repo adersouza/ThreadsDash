@@ -1,24 +1,13 @@
-import { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/services/firebase';
-import { collection, addDoc, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
-import { encryptSync, encrypt } from '@/services/encryption';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Key, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 interface AccountModalProps {
   open: boolean;
@@ -26,443 +15,52 @@ interface AccountModalProps {
 }
 
 export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
-  const { currentUser } = useAuth();
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    username: '',
-    displayName: '',
-    bio: '',
-    instagramToken: '',
-    instagramUserId: '',
-    csrfToken: '',
-    igDid: '',
-    mid: '',
-  });
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser) return;
-
-    if (!formData.username || !formData.displayName) {
-      toast({
-        title: 'Missing fields',
-        description: 'Please fill in username and display name',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!formData.instagramToken || !formData.instagramUserId) {
-      toast({
-        title: 'Missing credentials',
-        description: 'Please fill in Instagram token and user ID',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      // Encrypt Instagram token, CSRF token, ig_did, and mid (using simple base64 for now)
-      const encryptedToken = encryptSync(formData.instagramToken);
-      const encryptedCsrfToken = encryptSync(formData.csrfToken);
-      const encryptedIgDid = formData.igDid ? encryptSync(formData.igDid) : '';
-      const encryptedMid = formData.mid ? encryptSync(formData.mid) : '';
-
-      // Create account in Firestore
-      const accountData: any = {
-        username: formData.username.replace('@', ''), // Remove @ if present
-        displayName: formData.displayName,
-        bio: formData.bio,
-        avatarUrl: null,
-        postingMethod: 'api', // Default to API method since we have credentials
-        instagramToken: encryptedToken,
-        instagramUserId: formData.instagramUserId,
-        csrfToken: encryptedCsrfToken,
-        igDid: encryptedIgDid,
-        mid: encryptedMid,
-        isActive: true,
-        // Analytics baseline - defaults to 0, will be populated on first data fetch
-        baselineFollowersCount: 0,
-        baselineFollowingCount: 0,
-        baselinePostsCount: 0,
-        followersCount: 0,
-        followingCount: 0,
-        postsCount: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      await addDoc(collection(db, 'users', currentUser.uid, 'accounts'), accountData);
-
-      toast({
-        title: 'Account added',
-        description: `Successfully added @${formData.username}`,
-      });
-
-      // Reset form and close modal
-      setFormData({
-        username: '',
-        displayName: '',
-        bio: '',
-        instagramToken: '',
-        instagramUserId: '',
-        csrfToken: '',
-        igDid: '',
-        mid: '',
-      });
-      onOpenChange(false);
-    } catch (error) {
-      console.error('Error adding account:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to add account. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBulkImport = async () => {
-    if (!currentUser || !csvFile) return;
-
-    try {
-      setLoading(true);
-
-      const text = await csvFile.text();
-      const lines = text.split('\n').filter(line => line.trim());
-
-      const batch = writeBatch(db);
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const line of lines) {
-        const [username, token, userId] = line.split(':').map(s => s.trim());
-
-        if (!username || !token || !userId) {
-          errorCount++;
-          continue;
-        }
-
-        try {
-          const encryptedToken = await encrypt(token);
-          const accountRef = doc(collection(db, 'users', currentUser.uid, 'accounts'));
-
-          batch.set(accountRef, {
-            username: username.replace('@', ''),
-            displayName: username.replace('@', ''),
-            bio: '',
-            avatarUrl: null,
-            postingMethod: 'api',
-            instagramToken: encryptedToken,
-            instagramUserId: userId,
-            isActive: true,
-            // Analytics baseline - default to 0 for bulk imports
-            baselineFollowersCount: 0,
-            baselineFollowingCount: 0,
-            baselinePostsCount: 0,
-            followersCount: 0,
-            followingCount: 0,
-            postsCount: 0,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-
-          successCount++;
-        } catch (error) {
-          console.error(`Error processing line: ${line}`, error);
-          errorCount++;
-        }
-      }
-
-      await batch.commit();
-
-      toast({
-        title: 'Bulk import complete',
-        description: `Added ${successCount} accounts. ${errorCount > 0 ? `${errorCount} failed.` : ''}`,
-      });
-
-      setCsvFile(null);
-      onOpenChange(false);
-    } catch (error) {
-      console.error('Error bulk importing accounts:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to import accounts. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+  const handleOAuthConnect = () => {
+    const authUrl = new URL('https://threads.net/oauth/authorize');
+    authUrl.searchParams.set('client_id', '1620825335945838');
+    authUrl.searchParams.set('redirect_uri', 'https://threadsdash.web.app/auth/threads/callback');
+    authUrl.searchParams.set('scope', 'threads_basic,threads_content_publish,threads_manage_insights');
+    authUrl.searchParams.set('response_type', 'code');
+    window.location.href = authUrl.toString();
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Add Threads Account(s)</DialogTitle>
+          <DialogTitle>Add Threads Account</DialogTitle>
           <DialogDescription>
-            Add one or multiple Threads accounts to manage
+            Connect your Threads account using OAuth
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="oauth" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="oauth">OAuth (Recommended)</TabsTrigger>
-            <TabsTrigger value="single">Manual (Cookies)</TabsTrigger>
-            <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
-          </TabsList>
+        <div className="py-6 space-y-6">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Official Threads API</strong>
+              <p className="mt-2">Connect your Threads account securely using the official Meta OAuth flow.</p>
+              <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                <li>Secure and reliable</li>
+                <li>No manual cookie extraction needed</li>
+                <li>Long-lived access tokens (60 days)</li>
+                <li>Official Meta best practices</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
 
-          {/* OAuth Tab */}
-          <TabsContent value="oauth" className="space-y-4">
-            <div className="py-6 space-y-4">
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Official Threads API (Recommended)</strong>
-                  <p className="mt-2">Connect your Threads account securely using the official Meta OAuth flow. This method:</p>
-                  <ul className="list-disc list-inside mt-2 space-y-1">
-                    <li>Is more secure and reliable</li>
-                    <li>Doesn't require manual cookie extraction</li>
-                    <li>Provides long-lived access tokens (60 days)</li>
-                    <li>Follows Meta's best practices</li>
-                  </ul>
-                </AlertDescription>
-              </Alert>
-
-              <div className="flex flex-col items-center justify-center space-y-4 py-8">
-                <Button
-                  size="lg"
-                  onClick={() => {
-                    const authUrl = new URL('https://threads.net/oauth/authorize');
-                    authUrl.searchParams.set('client_id', '1620825335945838');
-                    authUrl.searchParams.set('redirect_uri', 'https://threadsdash.web.app/auth/threads/callback');
-                    authUrl.searchParams.set('scope', 'threads_basic,threads_content_publish,threads_manage_insights');
-                    authUrl.searchParams.set('response_type', 'code');
-                    window.location.href = authUrl.toString();
-                  }}
-                >
-                  Connect with Threads
-                </Button>
-                <p className="text-sm text-muted-foreground text-center">
-                  You'll be redirected to Threads to authorize this app
-                </p>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Single Account Tab */}
-          <TabsContent value="single">
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="username">
-                    Username <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="username"
-                    placeholder="@username or username"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    disabled={loading}
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="displayName">
-                    Display Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="displayName"
-                    placeholder="My Main Account"
-                    value={formData.displayName}
-                    onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                    disabled={loading}
-                    required
-                  />
-                </div>
-                {/* Instagram Credentials */}
-                <div className="border rounded-lg p-4 space-y-4">
-                  <Label className="text-base font-semibold">
-                    Instagram Credentials <span className="text-destructive">*</span>
-                  </Label>
-
-                  <Alert>
-                    <Key className="h-4 w-4" />
-                    <AlertDescription className="text-xs space-y-2">
-                      <p><strong>How to get your credentials:</strong></p>
-                      <ol className="list-decimal list-inside space-y-1 ml-2">
-                        <li>Open <a href="https://www.threads.net" target="_blank" rel="noopener noreferrer" className="text-primary underline">threads.net</a> and log in</li>
-                        <li>Press F12 to open Developer Tools</li>
-                        <li>Go to Application → Cookies → threads.net</li>
-                        <li>Find and copy these cookie values: "sessionid", "ds_user_id", "csrftoken", "ig_did", "mid"</li>
-                      </ol>
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="instagramToken">Instagram Session Token</Label>
-                    <Input
-                      id="instagramToken"
-                      type="password"
-                      placeholder="Paste sessionid cookie value here"
-                      value={formData.instagramToken}
-                      onChange={(e) => setFormData({ ...formData, instagramToken: e.target.value })}
-                      disabled={loading}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      The "sessionid" cookie value from threads.net
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="instagramUserId">Instagram User ID</Label>
-                    <Input
-                      id="instagramUserId"
-                      placeholder="1234567890"
-                      value={formData.instagramUserId}
-                      onChange={(e) => setFormData({ ...formData, instagramUserId: e.target.value })}
-                      disabled={loading}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      The "ds_user_id" cookie value from threads.net
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="csrfToken">CSRF Token</Label>
-                    <Input
-                      id="csrfToken"
-                      type="password"
-                      placeholder="Paste csrftoken cookie value here"
-                      value={formData.csrfToken}
-                      onChange={(e) => setFormData({ ...formData, csrfToken: e.target.value })}
-                      disabled={loading}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      The "csrftoken" cookie value from threads.net
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="igDid">IG DID</Label>
-                    <Input
-                      id="igDid"
-                      type="password"
-                      placeholder="Paste ig_did cookie value here"
-                      value={formData.igDid}
-                      onChange={(e) => setFormData({ ...formData, igDid: e.target.value })}
-                      disabled={loading}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      The "ig_did" cookie value from threads.net
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="mid">MID</Label>
-                    <Input
-                      id="mid"
-                      type="password"
-                      placeholder="Paste mid cookie value here"
-                      value={formData.mid}
-                      onChange={(e) => setFormData({ ...formData, mid: e.target.value })}
-                      disabled={loading}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      The "mid" cookie value from threads.net
-                    </p>
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="bio">Bio (optional)</Label>
-                  <Textarea
-                    id="bio"
-                    placeholder="Notes about this account..."
-                    value={formData.bio}
-                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                    disabled={loading}
-                    rows={2}
-                  />
-                </div>
-
-                {/* Analytics Info */}
-                <Alert className="border-t">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription className="text-xs">
-                    <strong>Analytics Tracking:</strong> We'll automatically fetch your current follower count, following, and posts when you add this account. Analytics will track growth from this baseline.
-                  </AlertDescription>
-                </Alert>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  disabled={loading}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Add Account
-                </Button>
-              </DialogFooter>
-            </form>
-          </TabsContent>
-
-          {/* Bulk Import Tab */}
-          <TabsContent value="bulk">
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label>CSV File Format</Label>
-                <div className="bg-muted p-3 rounded-md">
-                  <code className="text-xs">
-                    username:token:userId<br />
-                    sweetestmiaxfuego:eyJkc191c2VyX2lkIjo...:76571767086<br />
-                    another_account:eyJkc191c2VyX2lkIjo...:12345678901
-                  </code>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Each line: username:instagramToken:instagramUserId
-                </p>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="csv-file">Upload CSV File</Label>
-                <Input
-                  id="csv-file"
-                  type="file"
-                  accept=".csv,.txt"
-                  onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                  disabled={loading}
-                />
-              </div>
-
-              {csvFile && (
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
-                  <Upload className="h-4 w-4" />
-                  <span className="text-sm">{csvFile.name}</span>
-                </div>
-              )}
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleBulkImport} disabled={loading || !csvFile}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Import Accounts
-              </Button>
-            </DialogFooter>
-          </TabsContent>
-        </Tabs>
+          <div className="flex flex-col items-center justify-center space-y-4 py-4">
+            <Button
+              size="lg"
+              onClick={handleOAuthConnect}
+            >
+              Connect with Threads
+            </Button>
+            <p className="text-sm text-muted-foreground text-center">
+              You'll be redirected to Threads to authorize this app
+            </p>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

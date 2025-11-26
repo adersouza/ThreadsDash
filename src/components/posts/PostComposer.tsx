@@ -37,8 +37,6 @@ import {
   Save,
   X,
   Tag,
-  Chrome,
-  Zap,
 } from 'lucide-react';
 import type { MediaItem, Post, PostStatus } from '@/types/post';
 
@@ -49,7 +47,6 @@ const postSchema = z.object({
   scheduledFor: z.date().optional(),
   whoCanReply: z.enum(['everyone', 'followers', 'mentioned']),
   allowReplies: z.boolean(),
-  postingMethod: z.enum(['official', 'api', 'browser']).optional(),
 });
 
 type PostFormData = z.infer<typeof postSchema>;
@@ -91,7 +88,6 @@ export const PostComposer = ({
       topics: [],
       whoCanReply: 'everyone',
       allowReplies: true,
-      postingMethod: undefined,
     },
   });
 
@@ -120,12 +116,6 @@ export const PostComposer = ({
     }
   }, [editPost, prefilledScheduledDate, open, setValue, reset]);
 
-  // Set default posting method from selected account
-  useEffect(() => {
-    if (selectedAccount && !editPost) {
-      setValue('postingMethod', selectedAccount.postingMethod || 'api');
-    }
-  }, [selectedAccount, editPost, setValue]);
 
   const addTopic = () => {
     const topic = topicInput.trim().replace(/^#/, '');
@@ -305,8 +295,7 @@ export const PostComposer = ({
         // Call the Cloud Function to publish the post
         const publishPostFn = httpsCallable(functions, 'publishPost');
         await publishPostFn({
-          postId,
-          postingMethod: data.postingMethod || selectedAccount.postingMethod || 'api'
+          postId
         });
 
         toast({
@@ -541,65 +530,6 @@ export const PostComposer = ({
                     />
                   </div>
                 )}
-              </div>
-
-              <Separator />
-
-              {/* Posting Method */}
-              <div className="space-y-2">
-                <Label htmlFor="postingMethod">Posting Method</Label>
-                <Controller
-                  name="postingMethod"
-                  control={control}
-                  render={({ field }) => (
-                    <Select
-                      value={field.value || 'api'}
-                      onValueChange={field.onChange}
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger id="postingMethod">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="official">
-                          <div className="flex items-center gap-2">
-                            <Zap className="h-4 w-4 text-green-500" />
-                            <div>
-                              <div className="font-medium">Official API (OAuth)</div>
-                              <div className="text-xs text-muted-foreground">Recommended - Secure & reliable</div>
-                            </div>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="api">
-                          <div className="flex items-center gap-2">
-                            <Zap className="h-4 w-4" />
-                            <div>
-                              <div className="font-medium">Unofficial API</div>
-                              <div className="text-xs text-muted-foreground">Fast (~2s) - Higher risk</div>
-                            </div>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="browser">
-                          <div className="flex items-center gap-2">
-                            <Chrome className="h-4 w-4" />
-                            <div>
-                              <div className="font-medium">Browser Automation</div>
-                              <div className="text-xs text-muted-foreground">Safer - Requires external server</div>
-                            </div>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                <p className="text-sm text-muted-foreground">
-                  {watchedFields.postingMethod === 'official' ?
-                    'Official API uses OAuth - most secure and reliable method' :
-                    watchedFields.postingMethod === 'browser' ?
-                      'Browser method requires a separate posting server with AdsPower' :
-                      'API method is fast but uses unofficial endpoints'
-                  }
-                </p>
               </div>
 
               <Separator />

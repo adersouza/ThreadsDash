@@ -8,7 +8,7 @@
 
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import { postToThreadsApi } from './posting/threadsApi';
+import { postToThreadsOfficialApi } from './posting/threadsApi';
 
 const db = admin.firestore();
 
@@ -32,13 +32,8 @@ interface Account {
   id: string;
   userId: string;
   username: string;
-  postingMethod: 'browser' | 'api';
-  instagramToken?: string;
-  instagramUserId?: string;
-  csrfToken?: string;
-  igDid?: string;
-  mid?: string;
-  adsPowerProfileId?: string;
+  threadsAccessToken: string;
+  threadsUserId: string;
   lastPostAt?: admin.firestore.Timestamp | Date;
   postsLastHour?: number;
   postsToday?: number;
@@ -168,32 +163,21 @@ async function updateRateLimitCounters(userId: string, accountId: string): Promi
 }
 
 /**
- * Post using unofficial API method
+ * Post to Threads using official API
  */
-async function postViaApi(account: Account, post: Post): Promise<{
+async function postToThreads(account: Account, post: Post): Promise<{
   success: boolean;
   threadId?: string;
   error?: string;
 }> {
-  console.log(`Posting via API for account ${account.username}`);
+  console.log(`Posting to Threads for account ${account.username}`);
   console.log(`Content: ${post.content}`);
 
   try {
-    // Validate required credentials
-    if (!account.instagramToken || !account.instagramUserId) {
-      return {
-        success: false,
-        error: 'Instagram credentials not configured for this account',
-      };
-    }
-
-    // Call the actual posting API
-    const result = await postToThreadsApi(
-      account.instagramToken,
-      account.instagramUserId,
-      account.csrfToken || '',
-      account.igDid || '',
-      account.mid || '',
+    // Call the official Threads API
+    const result = await postToThreadsOfficialApi(
+      account.threadsAccessToken,
+      account.threadsUserId,
       {
         content: post.content,
         media: post.media,
@@ -205,7 +189,7 @@ async function postViaApi(account: Account, post: Post): Promise<{
 
     return result;
   } catch (error: any) {
-    console.error('Error posting via API:', error);
+    console.error('Error posting to Threads:', error);
     return {
       success: false,
       error: error.message || 'Unknown error',
@@ -213,53 +197,6 @@ async function postViaApi(account: Account, post: Post): Promise<{
   }
 }
 
-/**
- * Post using browser automation method
- *
- * NOTE: Browser automation cannot run in Cloud Functions.
- * To use this method, you need to:
- * 1. Deploy a separate server with AdsPower and Playwright
- * 2. Create an HTTP endpoint on that server
- * 3. Call that endpoint from here
- */
-async function postViaBrowser(account: Account, post: Post): Promise<{
-  success: boolean;
-  threadId?: string;
-  error?: string;
-}> {
-  console.log(`Posting via browser for account ${account.username}`);
-  console.log(`Content: ${post.content}`);
-
-  try {
-    // Browser automation requires a separate server
-    // Cloud Functions cannot run headless browsers with displays
-
-    // Example implementation if you have a posting server:
-    // const response = await fetch('https://your-posting-server.com/api/post', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     profileId: account.adsPowerProfileId,
-    //     content: post.content,
-    //     media: post.media,
-    //     topics: post.topics,
-    //     settings: post.settings,
-    //   }),
-    // });
-    // return await response.json();
-
-    return {
-      success: false,
-      error: 'Browser automation requires a separate server. Please use API method or deploy a posting server.',
-    };
-  } catch (error: any) {
-    console.error('Error posting via browser:', error);
-    return {
-      success: false,
-      error: error.message || 'Unknown error',
-    };
-  }
-}
 
 /**
  * Process a single scheduled post
@@ -305,21 +242,8 @@ async function processPost(userId: string, postId: string): Promise<void> {
     return;
   }
 
-  // Post using appropriate method
-  let result: { success: boolean; threadId?: string; error?: string };
-
-  if (account.postingMethod === 'api') {
-    result = await postViaApi(account, post);
-  } else if (account.postingMethod === 'browser') {
-    result = await postViaBrowser(account, post);
-  } else {
-    console.log(`Unknown posting method: ${account.postingMethod}`);
-    await postRef.update({
-      status: 'failed',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    return;
-  }
+  // Post to Threads
+  const result = await postToThreads(account, post);
 
   // Update post status
   if (result.success) {

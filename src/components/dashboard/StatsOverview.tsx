@@ -11,16 +11,7 @@ export const StatsOverview = ({ accounts }: StatsOverviewProps) => {
   const totalAccounts = accounts.length;
   const activeAccounts = accounts.filter((a) => a.status === 'active').length;
   const totalFollowers = accounts.reduce((sum, a) => sum + a.followersCount, 0);
-
-  // Calculate average engagement rate
-  const avgEngagement = accounts.length > 0
-    ? accounts.reduce((sum, a) => {
-        const engagementRate = a.followersCount > 0
-          ? Math.min(((a.postsCount * 10) / a.followersCount) * 100, 100)
-          : 0;
-        return sum + engagementRate;
-      }, 0) / accounts.length
-    : 0;
+  const totalPosts = accounts.reduce((sum, a) => sum + a.postsCount, 0);
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) {
@@ -55,8 +46,8 @@ export const StatsOverview = ({ accounts }: StatsOverviewProps) => {
       bgColor: 'bg-purple-100',
     },
     {
-      title: 'Avg Engagement',
-      value: `${avgEngagement.toFixed(1)}%`,
+      title: 'Total Posts',
+      value: formatNumber(totalPosts),
       icon: TrendingUp,
       color: 'text-orange-600',
       bgColor: 'bg-orange-100',

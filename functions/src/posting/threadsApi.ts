@@ -73,73 +73,7 @@ class RateLimiter {
 }
 
 /**
- * Upload media to Threads
- */
-async function uploadMedia(
-  token: string,
-  mediaUrl: string,
-  mediaType: 'image' | 'video'
-): Promise<{ success: boolean; uploadId?: string; error?: string }> {
-  try {
-    // Fetch the media file
-    const mediaResponse = await fetch(mediaUrl);
-    if (!mediaResponse.ok) {
-      return { success: false, error: 'Failed to fetch media file' };
-    }
-
-    const mediaBuffer = await mediaResponse.arrayBuffer();
-    const contentType = mediaResponse.headers.get('content-type') ||
-                       (mediaType === 'image' ? 'image/jpeg' : 'video/mp4');
-
-    // Generate upload ID (timestamp)
-    const uploadId = Date.now().toString();
-    const entityName = `fb_uploader_${uploadId}`;
-
-    // Upload the media
-    const uploadResponse = await fetch(
-      `https://www.threads.com/rupload_igphoto/${entityName}`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer IGT:2:${token}`,
-          'X-IG-App-ID': '238260118697367',
-          'X-Entity-Type': contentType,
-          'X-Entity-Name': entityName,
-          'X-Entity-Length': mediaBuffer.byteLength.toString(),
-          'Content-Type': contentType,
-          'Offset': '0',
-          'X-Instagram-Rupload-Params': JSON.stringify({
-            is_sidecar: '0',
-            is_threads: '1',
-            media_type: mediaType === 'image' ? 1 : 2,
-            upload_id: uploadId,
-          }),
-        },
-        body: mediaBuffer,
-      }
-    );
-
-    const uploadData = await uploadResponse.json();
-
-    if (uploadData.status === 'ok') {
-      return { success: true, uploadId };
-    }
-
-    return {
-      success: false,
-      error: uploadData.message || 'Failed to upload media',
-    };
-  } catch (error: any) {
-    console.error('Media upload error:', error);
-    return {
-      success: false,
-      error: error.message || 'Unknown error during media upload',
-    };
-  }
-}
-
-/**
- * Post to Threads using official API
+ * Post to Threads using official API (OAuth)
  */
 export async function postToThreadsOfficialApi(
   accessToken: string,
@@ -149,7 +83,6 @@ export async function postToThreadsOfficialApi(
 ): Promise<PostingResult> {
   const rateLimiter = RateLimiter.getInstance();
 
-  // Check rate limit
   if (!rateLimiter.canMakeRequest(accountId, 3)) {
     const nextAvailable = rateLimiter.getNextAvailableTime(accountId, 3);
     return {
@@ -162,96 +95,72 @@ export async function postToThreadsOfficialApi(
   try {
     const token = await decrypt(accessToken);
 
-    // Step 1: Create media container if there's media
-    let mediaContainerId: string | undefined;
-    if (postData.media && postData.media.length > 0) {
-      const firstMedia = postData.media[0];
-      const mediaType = firstMedia.type || 'image';
+    console.log('Creating Threads post container...');
+    console.log('User ID:', threadsUserId);
+    console.log('Token (first 10 chars):', token.substring(0, 10));
+    console.log('Post content:', postData.content);
 
-      // Create media container
-      const containerParams = new URLSearchParams({
-        media_type: mediaType === 'image' ? 'IMAGE' : 'VIDEO',
-        image_url: mediaType === 'image' ? firstMedia.url : undefined as any,
-        video_url: mediaType === 'video' ? firstMedia.url : undefined as any,
-        access_token: token,
-      });
+    // First, verify the token by checking the user's permissions
+    console.log('Verifying token permissions...');
+    const tokenCheckUrl = `https://graph.threads.net/v1.0/${threadsUserId}?fields=id,username,threads_profile_picture_url&access_token=${token}`;
+    const tokenCheckResponse = await fetch(tokenCheckUrl);
+    const tokenCheckData = await tokenCheckResponse.json();
+    console.log('Token verification response:', JSON.stringify(tokenCheckData));
 
-      // Remove undefined params
-      Array.from(containerParams.entries()).forEach(([key, value]) => {
-        if (value === 'undefined') containerParams.delete(key);
-      });
-
-      const containerResponse = await fetch(
-        `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
-        {
-          method: 'POST',
-          body: containerParams,
-        }
-      );
-
-      const containerData = await containerResponse.json();
-      if (!containerResponse.ok || !containerData.id) {
-        console.error('Media container creation error:', containerData);
-        return {
-          success: false,
-          error: containerData.error?.message || 'Failed to create media container',
-          timestamp: new Date(),
-        };
-      }
-
-      mediaContainerId = containerData.id;
-    }
-
-    // Step 2: Create threads container
-    const postParams = new URLSearchParams({
-      media_type: mediaContainerId ? undefined as any : 'TEXT', // TEXT for text-only posts
-      text: postData.content,
-      access_token: token,
-    });
-
-    // Remove undefined params
-    Array.from(postParams.entries()).forEach(([key, value]) => {
-      if (value === 'undefined') postParams.delete(key);
-    });
-
-    if (mediaContainerId) {
-      postParams.append('image_url', mediaContainerId);
-    }
-
-    // Add reply settings if specified
-    if (postData.settings?.whoCanReply && postData.settings.whoCanReply !== 'everyone') {
-      postParams.append('reply_control',
-        postData.settings.whoCanReply === 'followers' ? 'accounts_you_follow' : 'mentioned_only'
-      );
-    }
-
-    const postResponse = await fetch(
-      `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
-      {
-        method: 'POST',
-        body: postParams,
-      }
-    );
-
-    const postData2 = await postResponse.json();
-
-    if (!postResponse.ok || !postData2.id) {
-      console.error('Post creation error:', postData2);
+    if (tokenCheckData.error) {
+      console.error('Token verification failed:', tokenCheckData);
       return {
         success: false,
-        error: postData2.error?.message || 'Failed to create post',
+        error: `Token verification failed: ${tokenCheckData.error.message}. Please reconnect your account.`,
         timestamp: new Date(),
       };
     }
 
-    const creationId = postData2.id;
+    // Step 1: Create post container
+    const containerParams = new URLSearchParams({
+      media_type: 'TEXT',
+      text: postData.content,
+      access_token: token,
+    });
 
-    // Step 3: Publish the post
+    console.log('Request URL:', `https://graph.threads.net/v1.0/${threadsUserId}/threads`);
+    console.log('Request params:', Array.from(containerParams.entries()).filter(([key]) => key !== 'access_token').map(([key, val]) => `${key}=${val}`).join('&'));
+
+    const containerResponse = await fetch(
+      `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
+      {
+        method: 'POST',
+        body: containerParams,
+      }
+    );
+
+    const containerData = await containerResponse.json();
+    console.log('Container response:', JSON.stringify(containerData));
+
+    if (!containerResponse.ok || containerData.error) {
+      console.error('Container creation error:', containerData);
+      return {
+        success: false,
+        error: containerData.error?.message || 'Failed to create container',
+        timestamp: new Date(),
+      };
+    }
+
+    const creationId = containerData.id;
+    console.log('Container created:', creationId);
+
+    // Wait for the container to be processed by Meta's servers
+    // This is required - publishing immediately after creation often fails
+    console.log('Waiting 3 seconds for container to be processed...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Step 2: Publish the container
     const publishParams = new URLSearchParams({
       creation_id: creationId,
       access_token: token,
     });
 
+    console.log('Publishing container...');
     const publishResponse = await fetch(
       `https://graph.threads.net/v1.0/${threadsUserId}/threads_publish`,
       {
@@ -261,12 +170,13 @@ export async function postToThreadsOfficialApi(
     );
 
     const publishData = await publishResponse.json();
+    console.log('Publish response:', JSON.stringify(publishData));
 
-    if (!publishResponse.ok || !publishData.id) {
-      console.error('Post publish error:', publishData);
+    if (!publishResponse.ok || publishData.error) {
+      console.error('Publish error:', publishData);
       return {
         success: false,
-        error: publishData.error?.message || 'Failed to publish post',
+        error: publishData.error?.message || 'Failed to publish',
         timestamp: new Date(),
       };
     }
@@ -279,189 +189,7 @@ export async function postToThreadsOfficialApi(
       timestamp: new Date(),
     };
   } catch (error: any) {
-    console.error('Official Threads API posting error:', error);
-    return {
-      success: false,
-      error: error.message || 'Unknown error',
-      timestamp: new Date(),
-    };
-  }
-}
-
-/**
- * Post to Threads using unofficial API
- */
-export async function postToThreadsApi(
-  instagramToken: string,
-  instagramUserId: string,
-  csrfToken: string,
-  igDid: string,
-  mid: string,
-  postData: PostData,
-  accountId: string
-): Promise<PostingResult> {
-  const rateLimiter = RateLimiter.getInstance();
-
-  // Check rate limit
-  if (!rateLimiter.canMakeRequest(accountId, 3)) {
-    const nextAvailable = rateLimiter.getNextAvailableTime(accountId, 3);
-    return {
-      success: false,
-      error: `Rate limit exceeded. Next available: ${nextAvailable?.toLocaleString()}`,
-      timestamp: new Date(),
-    };
-  }
-
-  try {
-    const token = await decrypt(instagramToken);
-    const csrf = await decrypt(csrfToken);
-    const igDidDecrypted = igDid ? await decrypt(igDid) : '';
-    const midDecrypted = mid ? await decrypt(mid) : '';
-    const hasMedia = postData.media && postData.media.length > 0;
-
-    // Upload media if present (only first media item for now)
-    let uploadId: string | undefined;
-    if (hasMedia && postData.media) {
-      const firstMedia = postData.media[0];
-      const mediaType = firstMedia.type || 'image';
-
-      const uploadResult = await uploadMedia(token, firstMedia.url, mediaType);
-      if (!uploadResult.success) {
-        return {
-          success: false,
-          error: `Media upload failed: ${uploadResult.error}`,
-          timestamp: new Date(),
-        };
-      }
-      uploadId = uploadResult.uploadId;
-    }
-
-    // Prepare caption
-    let caption = postData.content;
-    if (postData.topics && postData.topics.length > 0) {
-      caption += '\n\n' + postData.topics.map(t => `#${t}`).join(' ');
-    }
-
-    // Prepare text_post_app_info
-    const textPostAppInfo = {
-      reply_control: postData.settings.whoCanReply === 'everyone' ? 0 :
-                     postData.settings.whoCanReply === 'followers' ? 1 : 2,
-      entry_point: 'sidebar_navigation',
-      excluded_inline_media_ids: '[]',
-      fediverse_composer_enabled: true,
-      is_reply_approval_enabled: false,
-      is_spoiler_media: false,
-      text_with_entities: {
-        entities: [],
-        text: postData.content,
-      },
-    };
-
-    // Prepare post data
-    const apiData: Record<string, string> = {
-      caption,
-      text_post_app_info: JSON.stringify(textPostAppInfo),
-      is_threads: 'true',
-      audience: 'default',
-    };
-
-    // Add upload_id if media was uploaded
-    if (uploadId) {
-      apiData.upload_id = uploadId;
-    }
-
-    // Choose endpoint based on media presence
-    // Threads API endpoints are on threads.com domain
-    const endpoint = hasMedia
-      ? 'https://www.threads.com/api/v1/media/configure_text_post_app_feed/'
-      : 'https://www.threads.com/api/v1/media/configure_text_only_post/';
-
-    console.log('Posting to endpoint:', endpoint);
-    console.log('Post data:', JSON.stringify(apiData, null, 2));
-
-    // Build Cookie header with all required cookies from real browser capture
-    let cookieHeader = `sessionid=${token}; ds_user_id=${instagramUserId}; csrftoken=${csrf}; dpr=1`;
-    if (igDidDecrypted) {
-      cookieHeader += `; ig_did=${igDidDecrypted}`;
-    }
-    if (midDecrypted) {
-      cookieHeader += `; mid=${midDecrypted}`;
-    }
-
-    // Make API request to Threads API
-    // Based on real browser request captured from threads.com
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        'Cookie': cookieHeader,
-        'X-CSRFToken': csrf,
-        'X-IG-App-ID': '238260118697367',
-        'X-ASBD-ID': '359341',
-        'X-Instagram-AJAX': '0',
-        'X-Bloks-Version-ID': '22713cafbb647b89c4e9c1acdea97d89c8c2046e2f4b18729760e9b1ae0724f7',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-        'Origin': 'https://www.threads.com',
-        'Referer': 'https://www.threads.com/',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin',
-        'Sec-CH-UA': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
-        'Sec-CH-UA-Mobile': '?0',
-        'Sec-CH-UA-Platform': '"macOS"',
-      },
-      body: new URLSearchParams(apiData).toString(),
-    });
-
-    // Log response status for debugging
-    console.log(`Threads API response status: ${response.status}`);
-
-    // Check if response is OK
-    if (!response.ok) {
-      const responseText = await response.text();
-      console.error(`Threads API error (${response.status}):`, responseText.substring(0, 500));
-
-      return {
-        success: false,
-        error: `Threads API returned ${response.status}: ${response.statusText}. Your session may have expired. Please re-add your account with fresh credentials.`,
-        timestamp: new Date(),
-      };
-    }
-
-    // Try to parse JSON response
-    let data: any;
-    try {
-      const responseText = await response.text();
-      console.log('Threads API response:', responseText.substring(0, 500));
-      data = JSON.parse(responseText);
-    } catch (jsonError) {
-      console.error('Failed to parse Threads API response as JSON:', jsonError);
-      return {
-        success: false,
-        error: 'Invalid response from Threads API. Your session may have expired.',
-        timestamp: new Date(),
-      };
-    }
-
-    if (data.status === 'ok' && data.media) {
-      rateLimiter.recordRequest(accountId);
-
-      return {
-        success: true,
-        threadId: data.media.id,
-        timestamp: new Date(),
-      };
-    }
-
-    return {
-      success: false,
-      error: data.message || 'Failed to post',
-      timestamp: new Date(),
-    };
-  } catch (error: any) {
-    console.error('Threads API posting error:', error);
+    console.error('Official API error:', error);
     return {
       success: false,
       error: error.message || 'Unknown error',

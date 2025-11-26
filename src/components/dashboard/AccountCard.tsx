@@ -2,14 +2,26 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Users, TrendingUp, Trash2 } from 'lucide-react';
+import { Users, TrendingUp, Trash2, Folder, MoreVertical } from 'lucide-react';
 import type { ThreadsAccount } from '@/types';
 import { useAccountStore } from '@/store/accountStore';
+import { useModelStore } from '@/store/modelStore';
 import { cn } from '@/lib/utils';
 import { db } from '@/services/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { updateAccountModels } from '@/services/accountService';
 import { useState } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface AccountCardProps {
   account: ThreadsAccount;
@@ -17,9 +29,13 @@ interface AccountCardProps {
 
 export const AccountCard = ({ account }: AccountCardProps) => {
   const { selectedAccount, setSelectedAccount } = useAccountStore();
+  const { models } = useModelStore();
   const { currentUser } = useAuth();
+  const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const isSelected = selectedAccount?.id === account.id;
+
+  const assignedModelIds = account.modelIds || [];
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card selection when clicking delete
@@ -47,10 +63,38 @@ export const AccountCard = ({ account }: AccountCardProps) => {
     }
   };
 
-  // Calculate engagement rate (simplified for now)
-  const engagementRate = account.followersCount > 0
-    ? Math.min(((account.postsCount * 10) / account.followersCount) * 100, 100)
-    : 0;
+  const handleToggleModel = async (modelId: string, e?: Event) => {
+    e?.stopPropagation();
+    if (!currentUser) return;
+
+    console.log('Toggling model:', modelId, 'for account:', account.id);
+    console.log('Current modelIds:', assignedModelIds);
+
+    try {
+      const newModelIds = assignedModelIds.includes(modelId)
+        ? assignedModelIds.filter((id) => id !== modelId)
+        : [...assignedModelIds, modelId];
+
+      console.log('New modelIds:', newModelIds);
+
+      await updateAccountModels(currentUser.uid, account.id, newModelIds);
+
+      const action = assignedModelIds.includes(modelId) ? 'removed from' : 'assigned to';
+      const modelName = models.find(m => m.id === modelId)?.name || 'model';
+
+      toast({
+        title: 'Model updated',
+        description: `Account ${action} ${modelName}`,
+      });
+    } catch (error) {
+      console.error('Error updating models:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update model assignments.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -96,7 +140,11 @@ export const AccountCard = ({ account }: AccountCardProps) => {
         'cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1',
         isSelected && 'ring-2 ring-primary'
       )}
-      onClick={() => setSelectedAccount(account)}
+      onClick={(e) => {
+        // Don't select account if clicking on buttons/dropdowns
+        if ((e.target as HTMLElement).closest('button')) return;
+        setSelectedAccount(account);
+      }}
     >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
@@ -133,15 +181,46 @@ export const AccountCard = ({ account }: AccountCardProps) => {
             <Badge variant={getStatusColor(account.status)}>
               {getStatusLabel(account.status)}
             </Badge>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={handleDelete}
-              disabled={isDeleting}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Assign to Models</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {models.length > 0 ? (
+                  models.map((model) => (
+                    <DropdownMenuCheckboxItem
+                      key={model.id}
+                      checked={assignedModelIds.includes(model.id)}
+                      onCheckedChange={() => handleToggleModel(model.id)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <Folder
+                        className="h-3 w-3 mr-2"
+                        style={{ color: model.color }}
+                      />
+                      {model.name}
+                    </DropdownMenuCheckboxItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled>
+                    No models created yet
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="h-3 w-3 mr-2" />
+                  Delete Account
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </CardHeader>
@@ -158,25 +237,35 @@ export const AccountCard = ({ account }: AccountCardProps) => {
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
             <div>
-              <p className="text-xs text-muted-foreground">Engagement</p>
-              <p className="font-semibold text-sm">{engagementRate.toFixed(1)}%</p>
+              <p className="text-xs text-muted-foreground">Posts</p>
+              <p className="font-semibold text-sm">{formatNumber(account.postsCount)}</p>
             </div>
           </div>
         </div>
 
-        {/* Engagement Progress Bar */}
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">Engagement Rate</span>
-            <span className="font-medium">{engagementRate.toFixed(1)}%</span>
+        {/* Assigned Models */}
+        {assignedModelIds.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-2 border-t">
+            {assignedModelIds.map((modelId) => {
+              const model = models.find((m) => m.id === modelId);
+              if (!model) return null;
+              return (
+                <Badge
+                  key={modelId}
+                  variant="outline"
+                  className="text-xs"
+                  style={{
+                    borderColor: model.color,
+                    color: model.color,
+                  }}
+                >
+                  <Folder className="h-2 w-2 mr-1" style={{ color: model.color }} />
+                  {model.name}
+                </Badge>
+              );
+            })}
           </div>
-          <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-purple-500 to-purple-700 transition-all"
-              style={{ width: `${engagementRate}%` }}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Last Synced */}
         <div className="text-xs text-muted-foreground pt-2 border-t">

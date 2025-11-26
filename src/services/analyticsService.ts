@@ -6,6 +6,7 @@ import {
   limit as firestoreLimit,
   getDocs,
   Timestamp,
+  QueryConstraint,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type {
@@ -31,7 +32,7 @@ export async function getAccountAnalytics(
       db,
       'users',
       userId,
-      'threadsAccounts',
+      'accounts',
       accountId,
       'analytics'
     );
@@ -56,10 +57,10 @@ export async function getAccountAnalytics(
         followersGained: data.followersGained || 0,
         followersLost: data.followersLost || 0,
         postsCount: data.postsCount || 0,
-        totalViews: data.totalViews || 0,
-        totalLikes: data.totalLikes || 0,
-        totalReplies: data.totalReplies || 0,
-        totalReposts: data.totalReposts || 0,
+        totalViews: data.views || 0,
+        totalLikes: data.likes || 0,
+        totalReplies: data.replies || 0,
+        totalReposts: data.reposts || 0,
         engagementRate: data.engagementRate || 0,
         averageEngagementRate: data.averageEngagementRate || 0,
         topPostId: data.topPostId,
@@ -75,24 +76,25 @@ export async function getAccountAnalytics(
 
 /**
  * Calculate optimal posting times based on historical engagement data
- * Pure math, no AI - analyzes last 30 days of posts
+ * Pure math, no AI - analyzes posts from specified timeframe
  */
 export async function calculateOptimalTimes(
   userId: string,
-  accountId: string
+  accountId: string,
+  days: number = 90
 ): Promise<OptimalTimeSlot[]> {
   try {
-    // Get posts from last 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    // Get posts from specified timeframe
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
 
     const postsRef = collection(db, 'users', userId, 'posts');
     const q = query(
       postsRef,
       where('accountId', '==', accountId),
       where('status', '==', 'published'),
-      where('publishedAt', '>=', Timestamp.fromDate(thirtyDaysAgo)),
-      orderBy('publishedAt', 'desc')
+      where('publishedAt', '>=', Timestamp.fromDate(startDate)),
+      orderBy('publishedAt', 'asc')
     );
 
     const snapshot = await getDocs(q);
@@ -110,10 +112,15 @@ export async function calculateOptimalTimes(
       const dayOfWeek = publishedAt.getDay();
       const key = `${dayOfWeek}-${hour}`;
 
-      const engagement =
-        data.performance.engagementRate ||
-        (data.performance.likes + data.performance.replies + data.performance.reposts) /
-          Math.max(data.performance.views, 1);
+      // Only include posts that have some views (actual data)
+      if (data.performance.views === 0) return;
+
+      // Calculate engagement rate from raw metrics
+      const totalEngagements =
+        (data.performance.likes || 0) +
+        (data.performance.replies || 0) +
+        (data.performance.reposts || 0);
+      const engagement = totalEngagements / data.performance.views;
 
       if (!timeSlots[key]) {
         timeSlots[key] = { total: 0, count: 0, posts: 0 };
@@ -141,6 +148,7 @@ export async function calculateOptimalTimes(
           postCount: data.posts,
         };
       })
+      .filter(slot => slot.postCount > 0 && slot.avgEngagement > 0) // Only show times with actual engagement
       .sort((a, b) => b.score - a.score)
       .slice(0, 10);
 
@@ -152,13 +160,111 @@ export async function calculateOptimalTimes(
 }
 
 /**
+ * Analyze posts to find the best day to post
+ */
+export async function getBestDayFromPosts(
+  userId: string,
+  accountId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<{ day: number; improvement: number } | null> {
+  try {
+    const postsRef = collection(db, 'users', userId, 'posts');
+    const q = query(
+      postsRef,
+      where('accountId', '==', accountId),
+      where('status', '==', 'published'),
+      where('publishedAt', '>=', Timestamp.fromDate(startDate)),
+      where('publishedAt', '<=', Timestamp.fromDate(endDate))
+    );
+
+    const snapshot = await getDocs(q);
+
+    if (snapshot.size === 0) return null;
+
+    const dayEngagement: Record<number, { total: number; count: number }> = {};
+    let totalEngagement = 0;
+    let totalCount = 0;
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      if (!data.performance || !data.publishedAt) return;
+
+      const publishedAt = data.publishedAt.toDate();
+      const dayOfWeek = publishedAt.getDay();
+
+      // Calculate engagement rate
+      const views = data.performance.views || 0;
+      if (views === 0) return;
+
+      const engagements =
+        (data.performance.likes || 0) +
+        (data.performance.replies || 0) +
+        (data.performance.reposts || 0);
+      const engagementRate = engagements / views;
+
+      if (!dayEngagement[dayOfWeek]) {
+        dayEngagement[dayOfWeek] = { total: 0, count: 0 };
+      }
+
+      dayEngagement[dayOfWeek].total += engagementRate;
+      dayEngagement[dayOfWeek].count += 1;
+      totalEngagement += engagementRate;
+      totalCount += 1;
+    });
+
+    if (totalCount === 0) return null;
+
+    const overallAvg = totalEngagement / totalCount;
+
+    // Find best day
+    const dayAverages = Object.entries(dayEngagement)
+      .map(([day, data]) => ({
+        day: parseInt(day),
+        avg: data.total / data.count,
+      }))
+      .filter(d => d.avg > 0);
+
+    if (dayAverages.length === 0) return null;
+
+    const bestDay = dayAverages.sort((a, b) => b.avg - a.avg)[0];
+    const improvement = ((bestDay.avg - overallAvg) / overallAvg) * 100;
+
+    return { day: bestDay.day, improvement };
+  } catch (error) {
+    console.error('Error finding best day from posts:', error);
+    return null;
+  }
+}
+
+/**
  * Generate insights based on analytics data
  * Pure logic-based insights, no AI
  */
-export function generateInsights(analytics: DailyAnalytics[]): AnalyticsInsight[] {
-  if (analytics.length === 0) return [];
-
+export async function generateInsights(
+  analytics: DailyAnalytics[],
+  userId: string,
+  accountId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<AnalyticsInsight[]> {
   const insights: AnalyticsInsight[] = [];
+
+  if (analytics.length === 0) {
+    // Still try to generate best day insight from posts even without daily analytics
+    const bestDay = await getBestDayFromPosts(userId, accountId, startDate, endDate);
+    if (bestDay) {
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      insights.push({
+        type: 'bestTime',
+        title: 'Best Day to Post',
+        description: `Posts on ${dayNames[bestDay.day]} get ${bestDay.improvement.toFixed(0)}% more engagement`,
+        value: bestDay.improvement,
+      });
+    }
+    return insights;
+  }
+
   const sorted = [...analytics].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   // Follower growth insight
@@ -207,34 +313,15 @@ export function generateInsights(analytics: DailyAnalytics[]): AnalyticsInsight[
     });
   }
 
-  // Best day to post
-  const dayEngagement: Record<number, { total: number; count: number }> = {};
-  sorted.forEach((day) => {
-    const dayOfWeek = day.date.getDay();
-    if (!dayEngagement[dayOfWeek]) {
-      dayEngagement[dayOfWeek] = { total: 0, count: 0 };
-    }
-    dayEngagement[dayOfWeek].total += day.engagementRate;
-    dayEngagement[dayOfWeek].count += 1;
-  });
-
-  const dayAverages = Object.entries(dayEngagement).map(([day, data]) => ({
-    day: parseInt(day),
-    avg: data.total / data.count,
-  }));
-
-  const bestDay = dayAverages.sort((a, b) => b.avg - a.avg)[0];
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
+  // Best day to post - calculate from individual posts
+  const bestDay = await getBestDayFromPosts(userId, accountId, startDate, endDate);
   if (bestDay) {
-    const overallAvg = sorted.reduce((sum, d) => sum + d.engagementRate, 0) / sorted.length;
-    const improvement = ((bestDay.avg - overallAvg) / overallAvg) * 100;
-
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     insights.push({
       type: 'bestTime',
       title: 'Best Day to Post',
-      description: `Posts on ${dayNames[bestDay.day]} get ${improvement.toFixed(0)}% more engagement`,
-      value: improvement,
+      description: `Posts on ${dayNames[bestDay.day]} get ${bestDay.improvement.toFixed(0)}% more engagement`,
+      value: bestDay.improvement,
     });
   }
 
@@ -257,26 +344,39 @@ export function generateInsights(analytics: DailyAnalytics[]): AnalyticsInsight[
 export async function getTopPosts(
   userId: string,
   accountId: string,
-  limitCount: number = 10
+  limitCount: number = 10,
+  startDate?: Date,
+  endDate?: Date
 ): Promise<TopPost[]> {
   try {
     const postsRef = collection(db, 'users', userId, 'posts');
-    const q = query(
-      postsRef,
+
+    const constraints: QueryConstraint[] = [
       where('accountId', '==', accountId),
       where('status', '==', 'published'),
-      orderBy('performance.engagementRate', 'desc'),
-      firestoreLimit(limitCount)
-    );
+    ];
+
+    // Add date range filters if provided
+    if (startDate) {
+      constraints.push(where('publishedAt', '>=', Timestamp.fromDate(startDate)));
+    }
+    if (endDate) {
+      constraints.push(where('publishedAt', '<=', Timestamp.fromDate(endDate)));
+    }
+
+    constraints.push(orderBy('publishedAt', 'desc'));
+    constraints.push(firestoreLimit(limitCount * 3)); // Get more to sort by engagement
+
+    const q = query(postsRef, ...constraints);
 
     const snapshot = await getDocs(q);
-    const topPosts: TopPost[] = [];
+    const allPosts: TopPost[] = [];
 
     snapshot.forEach((doc) => {
       const data = doc.data();
       if (!data.performance) return;
 
-      topPosts.push({
+      allPosts.push({
         postId: doc.id,
         accountId: data.accountId,
         content: data.content || '',
@@ -290,6 +390,11 @@ export async function getTopPosts(
         topics: data.topics || [],
       });
     });
+
+    // Sort by engagement rate and return top posts
+    const topPosts = allPosts
+      .sort((a, b) => b.engagementRate - a.engagementRate)
+      .slice(0, limitCount);
 
     return topPosts;
   } catch (error) {
@@ -362,6 +467,77 @@ export async function getAccountGrowth(
       netGrowth: 0,
       growthRate: 0,
       chartData: [],
+    };
+  }
+}
+
+/**
+ * Get summary metrics from posts within a date range
+ */
+export async function getPostsSummary(
+  userId: string,
+  accountId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<{
+  totalPosts: number;
+  totalViews: number;
+  totalLikes: number;
+  totalReplies: number;
+  totalReposts: number;
+  totalEngagements: number;
+  avgEngagementRate: number;
+}> {
+  try {
+    const postsRef = collection(db, 'users', userId, 'posts');
+    const q = query(
+      postsRef,
+      where('accountId', '==', accountId),
+      where('status', '==', 'published'),
+      where('publishedAt', '>=', Timestamp.fromDate(startDate)),
+      where('publishedAt', '<=', Timestamp.fromDate(endDate))
+    );
+
+    const snapshot = await getDocs(q);
+
+    let totalViews = 0;
+    let totalLikes = 0;
+    let totalReplies = 0;
+    let totalReposts = 0;
+    let totalEngagementRate = 0;
+    let postsWithMetrics = 0;
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      if (!data.performance) return;
+
+      totalViews += data.performance.views || 0;
+      totalLikes += data.performance.likes || 0;
+      totalReplies += data.performance.replies || 0;
+      totalReposts += data.performance.reposts || 0;
+      totalEngagementRate += data.performance.engagementRate || 0;
+      postsWithMetrics++;
+    });
+
+    return {
+      totalPosts: snapshot.size,
+      totalViews,
+      totalLikes,
+      totalReplies,
+      totalReposts,
+      totalEngagements: totalLikes + totalReplies + totalReposts,
+      avgEngagementRate: postsWithMetrics > 0 ? totalEngagementRate / postsWithMetrics : 0,
+    };
+  } catch (error) {
+    console.error('Error getting posts summary:', error);
+    return {
+      totalPosts: 0,
+      totalViews: 0,
+      totalLikes: 0,
+      totalReplies: 0,
+      totalReposts: 0,
+      totalEngagements: 0,
+      avgEngagementRate: 0,
     };
   }
 }
