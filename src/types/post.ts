@@ -24,12 +24,14 @@ export interface PostPerformance {
   engagementRate: number;
 }
 
-export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed';
+export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'deleted';
 
 export interface Post {
   id: string;
   userId: string; // Owner of the post
   accountId: string; // Which account to post from
+  modelId?: string; // AI model used to generate content (optional)
+  threadId?: string; // Threads post ID (for published posts)
   content: string;
   media: MediaItem[];
   status: PostStatus;
@@ -87,6 +89,7 @@ export interface CalendarPost {
 export interface PostFilter {
   status?: PostStatus[];
   accountId?: string;
+  modelId?: string;
   dateFrom?: Date;
   dateTo?: Date;
   searchQuery?: string;

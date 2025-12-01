@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAccountStore } from '@/store/accountStore';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 // import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
@@ -199,6 +200,9 @@ export const DashboardLayout = () => {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+
+          {/* Theme Toggle */}
+          <ThemeToggle />
 
           {/* User Menu */}
           <DropdownMenu>

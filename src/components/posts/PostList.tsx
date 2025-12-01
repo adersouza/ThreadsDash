@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/services/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePostStore } from '@/store/postStore';
 import { useAccountStore } from '@/store/accountStore';
@@ -32,6 +33,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { PostComposer } from './PostComposer';
 import {
@@ -55,6 +66,7 @@ const statusConfig: Record<
   scheduled: { label: 'Scheduled', variant: 'default' },
   published: { label: 'Published', variant: 'outline' },
   failed: { label: 'Failed', variant: 'destructive' },
+  deleted: { label: 'Deleted', variant: 'secondary' },
 };
 
 export const PostList = () => {
@@ -70,6 +82,9 @@ export const PostList = () => {
   const [selectedPosts, setSelectedPosts] = useState<Set<string>>(new Set());
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [postToDelete, setPostToDelete] = useState<Post | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter and search posts
   const filteredPosts = useMemo(() => {
@@ -101,24 +116,48 @@ export const PostList = () => {
     return accounts.find((acc) => acc.id === accountId);
   };
 
-  const handleDeletePost = async (postId: string) => {
-    if (!currentUser) return;
-    if (!confirm('Are you sure you want to delete this post?')) return;
+  const handleDeletePost = (post: Post) => {
+    setPostToDelete(post);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!currentUser || !postToDelete) return;
+
+    setIsDeleting(true);
 
     try {
-      await deleteDoc(doc(db, 'users', currentUser.uid, 'posts', postId));
-      removePost(postId);
-      toast({
-        title: 'Post deleted',
-        description: 'The post has been deleted successfully.',
-      });
-    } catch (error) {
+      // If post is published, delete from Threads first
+      if (postToDelete.status === 'published') {
+        const deleteThreadsPostFn = httpsCallable(functions, 'deleteThreadsPost');
+        await deleteThreadsPostFn({ postId: postToDelete.id });
+
+        toast({
+          title: 'Post deleted from Threads',
+          description: 'The post has been removed from Threads and marked as deleted.',
+        });
+      } else {
+        // For draft/scheduled posts, just delete from Firestore
+        await deleteDoc(doc(db, 'users', currentUser.uid, 'posts', postToDelete.id));
+        removePost(postToDelete.id);
+
+        toast({
+          title: 'Post deleted',
+          description: 'The post has been deleted successfully.',
+        });
+      }
+
+      setDeleteDialogOpen(false);
+      setPostToDelete(null);
+    } catch (error: any) {
       console.error('Error deleting post:', error);
       toast({
         title: 'Error',
-        description: 'Failed to delete post. Please try again.',
+        description: error.message || 'Failed to delete post. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -141,12 +180,30 @@ export const PostList = () => {
     if (!confirm(`Delete ${selectedPosts.size} selected posts?`)) return;
 
     try {
-      const deletePromises = Array.from(selectedPosts).map((postId) =>
-        deleteDoc(doc(db, 'users', currentUser.uid, 'posts', postId))
-      );
+      // Get the actual post objects to check their status
+      const selectedPostObjects = posts.filter((post) => selectedPosts.has(post.id));
+
+      // Separate published posts from draft/scheduled posts
+      const publishedPosts = selectedPostObjects.filter((post) => post.status === 'published');
+      const draftPosts = selectedPostObjects.filter((post) => post.status !== 'published');
+
+      const deletePromises: Promise<any>[] = [];
+
+      // Delete published posts from Threads
+      const deleteThreadsPostFn = httpsCallable(functions, 'deleteThreadsPost');
+      publishedPosts.forEach((post) => {
+        deletePromises.push(deleteThreadsPostFn({ postId: post.id }));
+      });
+
+      // Delete draft/scheduled posts from Firestore only
+      draftPosts.forEach((post) => {
+        deletePromises.push(deleteDoc(doc(db, 'users', currentUser.uid, 'posts', post.id)));
+      });
+
       await Promise.all(deletePromises);
 
-      selectedPosts.forEach((postId) => removePost(postId));
+      // Remove draft posts from local state (published posts are handled by Cloud Function)
+      draftPosts.forEach((post) => removePost(post.id));
       setSelectedPosts(new Set());
 
       toast({
@@ -216,6 +273,7 @@ export const PostList = () => {
               <SelectItem value="scheduled">Scheduled</SelectItem>
               <SelectItem value="published">Published</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="deleted">Deleted</SelectItem>
             </SelectContent>
           </Select>
           <Select value={accountFilter} onValueChange={setAccountFilter}>
@@ -376,11 +434,11 @@ export const PostList = () => {
                             Duplicate
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => handleDeletePost(post.id)}
+                            onClick={() => handleDeletePost(post)}
                             className="text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
+                            {post.status === 'published' ? 'Delete from Threads' : 'Delete'}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -400,6 +458,41 @@ export const PostList = () => {
           </div>
         )}
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {postToDelete?.status === 'published'
+                ? 'Delete post from Threads?'
+                : 'Delete post?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {postToDelete?.status === 'published'
+                ? 'This will permanently delete this post from Threads and mark it as deleted in your dashboard. This action cannot be undone.'
+                : 'This will permanently delete this post from your dashboard. This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Post Composer Modal */}
       <PostComposer

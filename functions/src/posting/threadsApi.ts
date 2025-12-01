@@ -5,6 +5,7 @@
  */
 
 import { decrypt } from '../encryption';
+import { spoofAndUploadImage, deleteTempImage } from '../utils/metadataSpoofing';
 
 interface PostData {
   content: string;
@@ -79,7 +80,8 @@ export async function postToThreadsOfficialApi(
   accessToken: string,
   threadsUserId: string,
   postData: PostData,
-  accountId: string
+  accountId: string,
+  userId?: string
 ): Promise<PostingResult> {
   const rateLimiter = RateLimiter.getInstance();
 
@@ -92,6 +94,8 @@ export async function postToThreadsOfficialApi(
     };
   }
 
+  const tempFiles: string[] = []; // Track temp files for cleanup
+
   try {
     const token = await decrypt(accessToken);
 
@@ -99,6 +103,7 @@ export async function postToThreadsOfficialApi(
     console.log('User ID:', threadsUserId);
     console.log('Token (first 10 chars):', token.substring(0, 10));
     console.log('Post content:', postData.content);
+    console.log('Media count:', postData.media?.length || 0);
 
     // First, verify the token by checking the user's permissions
     console.log('Verifying token permissions...');
@@ -116,12 +121,109 @@ export async function postToThreadsOfficialApi(
       };
     }
 
-    // Step 1: Create post container
-    const containerParams = new URLSearchParams({
-      media_type: 'TEXT',
-      text: postData.content,
-      access_token: token,
-    });
+    // Step 1: Handle media if present
+    let containerParams: URLSearchParams;
+    const hasMedia = postData.media && postData.media.length > 0;
+
+    if (hasMedia && userId && postData.media!.length > 1) {
+      // CAROUSEL POST (multiple media items)
+      console.log(`Creating carousel post with ${postData.media!.length} items`);
+
+      const mediaContainerIds: string[] = [];
+
+      // Create individual media containers for each item
+      for (const mediaItem of postData.media!) {
+        const isImage = mediaItem.type === 'image';
+        let mediaUrl = mediaItem.url;
+
+        // Spoof Firebase images
+        if (isImage && mediaItem.url.includes('firebasestorage')) {
+          console.log('Spoofing carousel image metadata...');
+          const { url: spoofedUrl, tempPath } = await spoofAndUploadImage(mediaItem.url, userId);
+          tempFiles.push(tempPath);
+          mediaUrl = spoofedUrl;
+        }
+
+        const mediaType = isImage ? 'IMAGE' : 'VIDEO';
+        const mediaKey = isImage ? 'image_url' : 'video_url';
+
+        const mediaParams = new URLSearchParams({
+          media_type: mediaType,
+          [mediaKey]: mediaUrl,
+          is_carousel_item: 'true',
+          access_token: token,
+        });
+
+        console.log(`Creating media container ${mediaContainerIds.length + 1}/${postData.media!.length}`);
+        const mediaContainerResponse = await fetch(
+          `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
+          {
+            method: 'POST',
+            body: mediaParams,
+          }
+        );
+
+        const mediaContainerData = await mediaContainerResponse.json();
+
+        if (!mediaContainerResponse.ok || mediaContainerData.error) {
+          console.error('Media container creation error:', mediaContainerData);
+          throw new Error(mediaContainerData.error?.message || 'Failed to create media container');
+        }
+
+        mediaContainerIds.push(mediaContainerData.id);
+        console.log(`Media container created: ${mediaContainerData.id}`);
+      }
+
+      // Create carousel container with all media IDs
+      containerParams = new URLSearchParams({
+        media_type: 'CAROUSEL',
+        children: mediaContainerIds.join(','),
+        text: postData.content,
+        access_token: token,
+      });
+
+      console.log('Creating carousel container with children:', mediaContainerIds.join(','));
+    } else if (hasMedia && userId) {
+      // SINGLE MEDIA POST
+      const firstMedia = postData.media![0];
+      console.log('Processing single media:', firstMedia.url);
+
+      // Check if it's an image (only spoof images, not videos)
+      const isImage = firstMedia.type === 'image';
+
+      if (isImage && firstMedia.url.includes('firebasestorage')) {
+        // Spoof and upload the image
+        console.log('Spoofing image metadata...');
+        const { url: spoofedUrl, tempPath } = await spoofAndUploadImage(firstMedia.url, userId);
+        tempFiles.push(tempPath);
+
+        // Create IMAGE post with spoofed image
+        containerParams = new URLSearchParams({
+          media_type: 'IMAGE',
+          image_url: spoofedUrl,
+          text: postData.content,
+          access_token: token,
+        });
+      } else {
+        // Use original URL for non-Firebase images or videos
+        const mediaType = isImage ? 'IMAGE' : 'VIDEO';
+        const mediaKey = isImage ? 'image_url' : 'video_url';
+
+        containerParams = new URLSearchParams({
+          media_type: mediaType,
+          [mediaKey]: firstMedia.url,
+          text: postData.content,
+          access_token: token,
+        });
+      }
+    } else {
+      // TEXT-ONLY POST
+      containerParams = new URLSearchParams({
+        media_type: 'TEXT',
+        text: postData.content,
+        access_token: token,
+      });
+    }
 
     console.log('Request URL:', `https://graph.threads.net/v1.0/${threadsUserId}/threads`);
     console.log('Request params:', Array.from(containerParams.entries()).filter(([key]) => key !== 'access_token').map(([key, val]) => `${key}=${val}`).join('&'));
@@ -183,6 +285,11 @@ export async function postToThreadsOfficialApi(
 
     rateLimiter.recordRequest(accountId);
 
+    // Clean up temp files
+    for (const tempPath of tempFiles) {
+      await deleteTempImage(tempPath);
+    }
+
     return {
       success: true,
       threadId: publishData.id,
@@ -190,6 +297,12 @@ export async function postToThreadsOfficialApi(
     };
   } catch (error: any) {
     console.error('Official API error:', error);
+
+    // Clean up temp files even if posting failed
+    for (const tempPath of tempFiles) {
+      await deleteTempImage(tempPath);
+    }
+
     return {
       success: false,
       error: error.message || 'Unknown error',

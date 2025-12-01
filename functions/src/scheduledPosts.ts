@@ -184,7 +184,8 @@ async function postToThreads(account: Account, post: Post): Promise<{
         topics: post.topics,
         settings: post.settings,
       },
-      account.id
+      account.id,
+      post.userId  // Pass userId for temp storage path (image spoofing)
     );
 
     return result;
@@ -249,6 +250,7 @@ async function processPost(userId: string, postId: string): Promise<void> {
   if (result.success) {
     await postRef.update({
       status: 'published',
+      threadId: result.threadId,
       publishedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -289,8 +291,9 @@ async function processPost(userId: string, postId: string): Promise<void> {
  * Scheduled function that runs every minute
  * Checks for posts that need to be published
  */
-export const processScheduledPosts = functions.pubsub
-  .schedule('every 1 minutes')
+export const processScheduledPosts = functions
+  .runWith({ memory: '512MB', timeoutSeconds: 120 })
+  .pubsub.schedule('every 1 minutes')
   .onRun(async (context) => {
     console.log('Processing scheduled posts...');
 
@@ -335,7 +338,9 @@ export const processScheduledPosts = functions.pubsub
  * HTTP callable function to publish a post immediately
  * Can be triggered from the frontend
  */
-export const publishPostNow = functions.https.onCall(async (data, context) => {
+export const publishPostNow = functions
+  .runWith({ memory: '512MB', timeoutSeconds: 120 })
+  .https.onCall(async (data, context) => {
   // Check authentication
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');

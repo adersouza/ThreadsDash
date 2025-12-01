@@ -30,6 +30,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { MediaUploader } from './MediaUploader';
+import { MediaLibraryPicker } from './MediaLibraryPicker';
 import { PostPreview } from './PostPreview';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -37,8 +38,12 @@ import {
   Save,
   X,
   Tag,
+  FolderOpen,
+  Clock,
+  Loader2,
 } from 'lucide-react';
 import type { MediaItem, Post, PostStatus } from '@/types/post';
+import { schedulePostToQueue } from '@/services/queueService';
 
 const postSchema = z.object({
   accountId: z.string().min(1, 'Please select an account'),
@@ -72,6 +77,7 @@ export const PostComposer = ({
   const [topicInput, setTopicInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
+  const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
 
   const {
     control,
@@ -130,6 +136,13 @@ export const PostComposer = ({
       'topics',
       watchedFields.topics.filter((t) => t !== topic)
     );
+  };
+
+  const handleMediaFromLibrary = (selectedMedia: MediaItem[]) => {
+    // Merge with existing media, avoiding duplicates
+    const existingIds = new Set(media.map((m) => m.id));
+    const newMedia = selectedMedia.filter((m) => !existingIds.has(m.id));
+    setMedia([...media, ...newMedia]);
   };
 
   const savePost = async (data: PostFormData, status: PostStatus) => {
@@ -203,6 +216,7 @@ export const PostComposer = ({
           scheduled: 'Post scheduled successfully',
           published: 'Post published successfully',
           failed: 'Post failed',
+          deleted: 'Post deleted',
         };
 
         toast({
@@ -238,6 +252,83 @@ export const PostComposer = ({
 
   const saveDraft = () => {
     handleSubmit((data) => savePost(data, 'draft'))();
+  };
+
+  const addToQueue = async () => {
+    if (!currentUser) return;
+
+    try {
+      setIsSubmitting(true);
+
+      // First validate the form
+      const data = watchedFields;
+      if (!data.accountId) {
+        toast({
+          title: 'Account required',
+          description: 'Please select an account',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Create the post data
+      const postData = {
+        userId: currentUser.uid,
+        accountId: data.accountId,
+        content: data.content,
+        media: media.map((m) => ({
+          id: m.id,
+          type: m.type,
+          url: m.url,
+          thumbnailUrl: m.thumbnailUrl,
+          fileName: m.fileName,
+          size: m.size,
+          uploadedAt: m.uploadedAt,
+        })),
+        status: 'scheduled' as PostStatus,
+        scheduledFor: null, // Will be set by queue service
+        publishedAt: null,
+        topics: data.topics || [],
+        settings: {
+          allowReplies: data.allowReplies,
+          whoCanReply: data.whoCanReply,
+          topics: data.topics || [],
+        },
+        updatedAt: serverTimestamp(),
+      };
+
+      // Create the post in Firestore
+      const postsRef = collection(db, 'users', currentUser.uid, 'posts');
+      const docRef = await addDoc(postsRef, {
+        ...postData,
+        createdAt: serverTimestamp(),
+      });
+
+      // Schedule it to the next queue slot
+      const scheduledFor = await schedulePostToQueue(
+        currentUser.uid,
+        docRef.id,
+        data.accountId
+      );
+
+      toast({
+        title: 'Added to queue',
+        description: scheduledFor
+          ? `Scheduled for ${format(scheduledFor, 'PPp')}`
+          : 'Post added to queue',
+      });
+
+      onOpenChange(false);
+    } catch (error: any) {
+      console.error('Error adding to queue:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add post to queue',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Save post and publish immediately via Cloud Function
@@ -419,7 +510,19 @@ export const PostComposer = ({
 
               {/* Media Upload */}
               <div className="space-y-2">
-                <Label>Media</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Media</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLibraryPickerOpen(true)}
+                    disabled={isSubmitting}
+                  >
+                    <FolderOpen className="h-4 w-4 mr-2" />
+                    Select from Library
+                  </Button>
+                </div>
                 <MediaUploader
                   media={media}
                   onMediaChange={setMedia}
@@ -609,19 +712,48 @@ export const PostComposer = ({
               onClick={saveDraft}
               disabled={isSubmitting || isOverLimit}
             >
-              <Save className="h-4 w-4 mr-2" />
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
               Save Draft
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addToQueue}
+              disabled={isSubmitting || isOverLimit || !watchedFields.accountId}
+            >
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Clock className="h-4 w-4 mr-2" />
+              )}
+              Add to Queue
             </Button>
             <Button
               onClick={handleSubmit(onSubmit)}
               disabled={isSubmitting || isOverLimit}
             >
-              <Send className="h-4 w-4 mr-2" />
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4 mr-2" />
+              )}
               {watchedFields.scheduledFor ? 'Schedule Post' : 'Post Now'}
             </Button>
           </div>
         </div>
       </DialogContent>
+
+      {/* Media Library Picker */}
+      <MediaLibraryPicker
+        open={libraryPickerOpen}
+        onOpenChange={setLibraryPickerOpen}
+        onSelectMedia={handleMediaFromLibrary}
+        selectedMedia={media}
+      />
     </Dialog>
   );
 };

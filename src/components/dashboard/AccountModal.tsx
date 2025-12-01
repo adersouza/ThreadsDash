@@ -19,7 +19,7 @@ export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
     const authUrl = new URL('https://threads.net/oauth/authorize');
     authUrl.searchParams.set('client_id', '1620825335945838');
     authUrl.searchParams.set('redirect_uri', 'https://threadsdash.web.app/auth/threads/callback');
-    authUrl.searchParams.set('scope', 'threads_basic,threads_content_publish,threads_manage_insights');
+    authUrl.searchParams.set('scope', 'threads_basic,threads_content_publish,threads_manage_insights,threads_delete');
     authUrl.searchParams.set('response_type', 'code');
     window.location.href = authUrl.toString();
   };

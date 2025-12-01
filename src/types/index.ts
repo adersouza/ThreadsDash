@@ -235,3 +235,45 @@ export interface RateLimitInfo {
   postsRemainingToday: number;
 }
 
+// Media Library Types
+export interface MediaFile {
+  id: string;
+  userId: string;
+  fileName: string;
+  originalFileName: string;
+  fileSize: number; // in bytes
+  mimeType: string;
+  fileType: 'image' | 'video';
+  storageUrl: string; // Firebase Storage URL
+  thumbnailUrl?: string; // Thumbnail for videos
+  width?: number;
+  height?: number;
+  duration?: number; // For videos, in seconds
+  createdAt: Date;
+  updatedAt: Date;
+  usageCount: number; // How many times this media has been used
+  lastUsedAt?: Date;
+  tags: string[];
+  description?: string;
+}
+
+// Queue System Types
+export interface QueueSlot {
+  id: string;
+  userId: string;
+  accountId: string;
+  dayOfWeek: number; // 0-6 (Sunday-Saturday)
+  timeSlot: string; // Format: "HH:mm" (e.g., "09:00")
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface QueuedPost {
+  postId: string;
+  accountId: string;
+  queuePosition: number;
+  scheduledFor?: Date; // Assigned time slot
+  addedToQueueAt: Date;
+}
+

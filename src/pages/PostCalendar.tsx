@@ -3,6 +3,7 @@ import { Calendar, momentLocalizer, Views, View } from 'react-big-calendar';
 import moment from 'moment';
 import { usePostStore } from '@/store/postStore';
 import { useAccountStore } from '@/store/accountStore';
+import { useModelStore } from '@/store/modelStore';
 import { usePosts } from '@/hooks/usePosts';
 import { Button } from '@/components/ui/button';
 
@@ -15,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { PostComposer } from '@/components/posts/PostComposer';
+import { QueueManagement } from '@/components/settings/QueueManagement';
 import { Plus, Loader2 } from 'lucide-react';
 import type { Post } from '@/types/post';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -46,11 +48,13 @@ interface CalendarEvent {
 export const PostCalendar = () => {
   const { posts, loading, selectPost } = usePostStore();
   const { accounts } = useAccountStore();
+  const { models } = useModelStore();
   const { isInitialized } = usePosts();
 
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState(new Date());
   const [accountFilter, setAccountFilter] = useState<string>('all');
+  const [modelFilter, setModelFilter] = useState<string>('all');
   const [composerOpen, setComposerOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [prefilledDate, setPrefilledDate] = useState<Date | null>(null);
@@ -77,10 +81,19 @@ export const PostCalendar = () => {
           return false;
         }
 
+        // Apply model filter
+        if (modelFilter !== 'all') {
+          if (modelFilter === 'none' && post.modelId) {
+            return false; // Filter out posts with models
+          } else if (modelFilter !== 'none' && post.modelId !== modelFilter) {
+            return false; // Filter to specific model
+          }
+        }
+
         return true;
       })
       .map((post) => {
-        
+
         const startDate = new Date(post.scheduledFor!);
         const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 minutes duration
 
@@ -93,7 +106,7 @@ export const PostCalendar = () => {
           color: getAccountColor(post.accountId),
         };
       });
-  }, [posts, accountFilter, getAccountColor]);
+  }, [posts, accountFilter, modelFilter, getAccountColor]);
 
   // Handle event click
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
@@ -164,21 +177,41 @@ export const PostCalendar = () => {
       {/* Filters */}
       <Card className="p-4">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Filter by account:</span>
-            <Select value={accountFilter} onValueChange={setAccountFilter}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Accounts</SelectItem>
-                {accounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    @{account.username}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Account:</span>
+              <Select value={accountFilter} onValueChange={setAccountFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Accounts</SelectItem>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      @{account.username}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Model:</span>
+              <Select value={modelFilter} onValueChange={setModelFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Models</SelectItem>
+                  <SelectItem value="none">No Model</SelectItem>
+                  {models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Legend */}
@@ -265,6 +298,9 @@ export const PostCalendar = () => {
           <p className="text-sm text-muted-foreground">Upcoming Posts</p>
         </Card>
       </div>
+
+      {/* Queue Management */}
+      <QueueManagement />
 
       {/* Post Composer Modal */}
       <PostComposer

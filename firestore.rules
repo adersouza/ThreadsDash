@@ -45,6 +45,16 @@ service cloud.firestore {
       match /analytics/{analyticsId} {
         allow read, write: if isOwner(userId);
       }
+
+      // Media subcollection
+      match /media/{mediaId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Queue slots subcollection
+      match /queueSlots/{slotId} {
+        allow read, write: if isOwner(userId);
+      }
     }
   }
 }

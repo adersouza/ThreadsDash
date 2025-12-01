@@ -8,7 +8,9 @@ import * as admin from 'firebase-admin';
 
 const db = admin.firestore();
 
-export const publishPost = functions.https.onCall(async (data, context) => {
+export const publishPost = functions
+  .runWith({ memory: '512MB', timeoutSeconds: 120 })
+  .https.onCall(async (data, context) => {
   // Check authentication
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -66,14 +68,25 @@ export const publishPost = functions.https.onCall(async (data, context) => {
       account.threadsAccessToken,
       account.threadsUserId,
       post as any,
-      accountDoc.id
+      accountDoc.id,
+      userId  // Pass userId for temp storage path
     );
 
     if (result.success) {
       // Update post status
       await postRef.update({
         status: 'published',
+        threadId: result.threadId,
         publishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Log activity
+      await db.collection('users').doc(userId).collection('activity').add({
+        type: 'post_published',
+        postId: postId,
+        accountId: post!.accountId,
+        threadId: result.threadId,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
       return { success: true, message: 'Post published successfully' };

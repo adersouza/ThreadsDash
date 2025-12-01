@@ -15,3 +15,4 @@ export { instagramLogin } from './instagramAuth';
 export { publishPost } from './publishPost';
 export { exchangeThreadsToken } from './auth/threadsOAuth';
 export { fetchDailyAnalytics, refreshAccountAnalytics } from './fetchAnalytics';
+export { deleteThreadsPost } from './deleteThreadsPost';
