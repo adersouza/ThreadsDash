@@ -109,20 +109,9 @@ export async function postToThreadsOfficialApi(
           const originalTopic = topic.trim();
           if (!originalTopic) return null;
 
-          // Convert multi-word topics to camelCase for hashtags
-          // e.g., "arkham knight" -> "ArkhamKnight"
-          const words = originalTopic.split(/\s+/);
-          let cleanTopic;
-
-          if (words.length > 1) {
-            // Multi-word: capitalize each word and join (camelCase)
-            cleanTopic = words
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-              .join('');
-          } else {
-            // Single word: just remove special chars
-            cleanTopic = originalTopic.replace(/[^a-zA-Z0-9_]/g, '');
-          }
+          // Remove spaces from hashtags (Threads doesn't support spaces in hashtags)
+          // e.g., "New York" -> "NewYork" (but preserve the original topic text)
+          const cleanTopic = originalTopic.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_]/g, '');
 
           if (!cleanTopic) return null;
 
@@ -132,12 +121,14 @@ export async function postToThreadsOfficialApi(
           const contentLower = finalContent.toLowerCase();
           const topicLower = originalTopic.toLowerCase();
           const hashtagLower = hashtagWithHash.toLowerCase();
+          const cleanTopicLower = cleanTopic.toLowerCase();
 
           // Don't add if:
-          // 1. The hashtag is already in content: "#arkhamknight"
-          // 2. The topic text is already in content: "arkham knight" or "arkhamknight"
+          // 1. The hashtag is already in content: "#newyork"
+          // 2. The clean topic (no spaces) is already in content: "newyork"
+          // 3. The original topic text is already in content: "new york"
           if (contentLower.includes(hashtagLower) ||
-              contentLower.includes(topicLower.replace(/\s+/g, '')) ||
+              contentLower.includes(cleanTopicLower) ||
               contentLower.includes(topicLower)) {
             return null;
           }

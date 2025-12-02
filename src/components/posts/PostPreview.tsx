@@ -114,17 +114,6 @@ export const PostPreview = ({
               ))}
             </div>
           )}
-
-          {/* Topics */}
-          {topics.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {topics.map((topic, index) => (
-                <Badge key={index} variant="secondary" className="text-xs">
-                  #{topic}
-                </Badge>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Engagement Controls */}
