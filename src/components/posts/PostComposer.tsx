@@ -463,9 +463,9 @@ export const PostComposer = ({
               <div className="space-y-2">
                 <Label htmlFor="model">Model</Label>
                 <Select
-                  value={selectedModelId}
+                  value={selectedModelId || "all"}
                   onValueChange={(value) => {
-                    setSelectedModelId(value);
+                    setSelectedModelId(value === "all" ? "" : value);
                     // Reset account selection when model changes
                     setValue('accountId', '');
                   }}
@@ -475,7 +475,7 @@ export const PostComposer = ({
                     <SelectValue placeholder="All Accounts" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Accounts</SelectItem>
+                    <SelectItem value="all">All Accounts</SelectItem>
                     {models.map((model) => (
                       <SelectItem key={model.id} value={model.id}>
                         {model.name}
