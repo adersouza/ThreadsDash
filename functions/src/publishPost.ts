@@ -6,7 +6,10 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 
-const db = admin.firestore();
+// Lazy initialization to avoid timeout during deployment
+function getDb() {
+  return admin.firestore();
+}
 
 export const publishPost = functions
   .runWith({ memory: '512MB', timeoutSeconds: 120 })
@@ -28,7 +31,7 @@ export const publishPost = functions
     const { postToThreadsOfficialApi } = await import('./posting/threadsApi');
 
     // Get post document
-    const postRef = db.collection('users').doc(userId).collection('posts').doc(postId);
+    const postRef = getDb().collection('users').doc(userId).collection('posts').doc(postId);
     const postDoc = await postRef.get();
 
     if (!postDoc.exists) {
@@ -38,7 +41,7 @@ export const publishPost = functions
     const post = postDoc.data();
 
     // Get account document
-    const accountRef = db.collection('users').doc(userId).collection('accounts').doc(post!.accountId);
+    const accountRef = getDb().collection('users').doc(userId).collection('accounts').doc(post!.accountId);
     const accountDoc = await accountRef.get();
 
     if (!accountDoc.exists) {
@@ -81,7 +84,7 @@ export const publishPost = functions
       });
 
       // Log activity
-      await db.collection('users').doc(userId).collection('activity').add({
+      await getDb().collection('users').doc(userId).collection('activity').add({
         type: 'post_published',
         postId: postId,
         accountId: post!.accountId,

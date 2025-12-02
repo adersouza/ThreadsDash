@@ -2,14 +2,9 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
     // Helper function to check if user owns the resource
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return request.auth != null && request.auth.uid == userId;
     }
 
     // Users collection
@@ -18,7 +13,59 @@ service cloud.firestore {
 
       // Accounts subcollection
       match /accounts/{accountId} {
-        allow read, write: if isOwner(userId);
+        // Allow read but exclude sensitive token fields from client access
+        allow read: if isOwner(userId);
+
+        // Validate account data on create
+        allow create: if isOwner(userId) &&
+          request.resource.data.keys().hasAll(['userId', 'username', 'displayName', 'status', 'createdAt']) &&
+          request.resource.data.userId == userId &&
+          request.resource.data.username is string &&
+          request.resource.data.username.size() > 0 &&
+          request.resource.data.username.size() <= 30 &&
+          request.resource.data.displayName is string &&
+          request.resource.data.displayName.size() > 0 &&
+          request.resource.data.displayName.size() <= 50 &&
+          request.resource.data.status in ['active', 'inactive', 'suspended', 'pending'] &&
+          request.resource.data.createdAt is timestamp &&
+          // Prevent clients from setting tokens
+          !('accessToken' in request.resource.data) &&
+          !('refreshToken' in request.resource.data) &&
+          !('threadsAccessToken' in request.resource.data);
+
+        // Validate account data on update
+        allow update: if isOwner(userId) &&
+          // Cannot change ownership - if userId is in the update, it must match existing
+          (!('userId' in request.resource.data) ||
+            request.resource.data.userId == resource.data.userId) &&
+          // Validate field types and sizes if present
+          (!('username' in request.resource.data) ||
+            (request.resource.data.username is string && request.resource.data.username.size() > 0 && request.resource.data.username.size() <= 30)) &&
+          (!('displayName' in request.resource.data) ||
+            (request.resource.data.displayName is string && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 50)) &&
+          (!('bio' in request.resource.data) ||
+            (request.resource.data.bio is string && request.resource.data.bio.size() <= 150)) &&
+          (!('status' in request.resource.data) ||
+            request.resource.data.status in ['active', 'inactive', 'suspended', 'pending']) &&
+          // Allow updating modelIds (array of strings)
+          (!('modelIds' in request.resource.data) ||
+            (request.resource.data.modelIds is list &&
+             request.resource.data.modelIds.size() <= 50)) &&
+          // Prevent clients from modifying tokens
+          (
+            !('accessToken' in request.resource.data) ||
+            request.resource.data.accessToken == resource.data.accessToken
+          ) &&
+          (
+            !('refreshToken' in request.resource.data) ||
+            request.resource.data.refreshToken == resource.data.refreshToken
+          ) &&
+          (
+            !('threadsAccessToken' in request.resource.data) ||
+            request.resource.data.threadsAccessToken == resource.data.threadsAccessToken
+          );
+
+        allow delete: if isOwner(userId);
 
         // Analytics subcollection for each account
         match /analytics/{analyticsId} {
@@ -28,12 +75,53 @@ service cloud.firestore {
 
       // Posts subcollection
       match /posts/{postId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+
+        // Validate post data on create
+        allow create: if isOwner(userId) &&
+          request.resource.data.keys().hasAll(['userId', 'accountId', 'content', 'status', 'createdAt']) &&
+          request.resource.data.userId == userId &&
+          request.resource.data.content is string &&
+          request.resource.data.content.size() <= 500 && // Threads limit
+          request.resource.data.status in ['draft', 'scheduled', 'publishing', 'published', 'failed'] &&
+          request.resource.data.createdAt is timestamp;
+
+        // Validate post data on update
+        allow update: if isOwner(userId) &&
+          // Cannot change ownership - if userId is in the update, it must match existing
+          (!('userId' in request.resource.data) ||
+            request.resource.data.userId == resource.data.userId) &&
+          // Cannot change account - if accountId is in the update, it must match existing
+          (!('accountId' in request.resource.data) ||
+            request.resource.data.accountId == resource.data.accountId) &&
+          (!('content' in request.resource.data) ||
+            (request.resource.data.content is string && request.resource.data.content.size() <= 500));
+
+        allow delete: if isOwner(userId);
       }
 
       // Models subcollection
       match /models/{modelId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+
+        // Validate model data
+        allow create: if isOwner(userId) &&
+          request.resource.data.keys().hasAll(['userId', 'name', 'createdAt']) &&
+          request.resource.data.userId == userId &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() <= 100 &&
+          (!('description' in request.resource.data) ||
+            (request.resource.data.description is string && request.resource.data.description.size() <= 500));
+
+        allow update: if isOwner(userId) &&
+          // Cannot change ownership - if userId is in the update, it must match existing
+          (!('userId' in request.resource.data) ||
+            request.resource.data.userId == resource.data.userId) &&
+          (!('name' in request.resource.data) ||
+            (request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100));
+
+        allow delete: if isOwner(userId);
       }
 
       // Activity subcollection
@@ -48,12 +136,59 @@ service cloud.firestore {
 
       // Media subcollection
       match /media/{mediaId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+
+        // Validate media metadata
+        allow create: if isOwner(userId) &&
+          request.resource.data.keys().hasAll(['userId', 'fileName', 'fileType', 'storageUrl', 'createdAt']) &&
+          request.resource.data.userId == userId &&
+          request.resource.data.fileName is string &&
+          request.resource.data.fileName.size() > 0 &&
+          request.resource.data.fileName.size() <= 255 &&
+          request.resource.data.fileType in ['image', 'video'] &&
+          request.resource.data.storageUrl is string &&
+          // Validate URL points to Firebase Storage
+          request.resource.data.storageUrl.matches('https://firebasestorage\\.googleapis\\.com/.*') &&
+          request.resource.data.createdAt is timestamp;
+
+        allow update: if isOwner(userId) &&
+          // Cannot change ownership - if userId is in the update, it must match existing
+          (!('userId' in request.resource.data) ||
+            request.resource.data.userId == resource.data.userId) &&
+          // Cannot change file type - if fileType is in the update, it must match existing
+          (!('fileType' in request.resource.data) ||
+            request.resource.data.fileType == resource.data.fileType) &&
+          // Cannot change storage URL - if storageUrl is in the update, it must match existing
+          (!('storageUrl' in request.resource.data) ||
+            request.resource.data.storageUrl == resource.data.storageUrl);
+
+        allow delete: if isOwner(userId);
       }
 
       // Queue slots subcollection
       match /queueSlots/{slotId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+
+        // Validate queue slot data
+        allow create: if isOwner(userId) &&
+          request.resource.data.keys().hasAll(['userId', 'accountId', 'dayOfWeek', 'timeSlot', 'isActive', 'createdAt']) &&
+          request.resource.data.userId == userId &&
+          request.resource.data.dayOfWeek is int &&
+          request.resource.data.dayOfWeek >= 0 &&
+          request.resource.data.dayOfWeek <= 6 &&
+          request.resource.data.timeSlot is string &&
+          request.resource.data.timeSlot.matches('^[0-2][0-9]:[0-5][0-9]$') && // HH:mm format
+          request.resource.data.isActive is bool;
+
+        allow update: if isOwner(userId) &&
+          // Cannot change ownership - if userId is in the update, it must match existing
+          (!('userId' in request.resource.data) ||
+            request.resource.data.userId == resource.data.userId) &&
+          // Cannot change account - if accountId is in the update, it must match existing
+          (!('accountId' in request.resource.data) ||
+            request.resource.data.accountId == resource.data.accountId);
+
+        allow delete: if isOwner(userId);
       }
     }
   }

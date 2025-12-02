@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(yes:*)",
+      "Bash(npx create-vite:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss init -p)",
+      "Bash(npm run dev)",
+      "Bash(tree:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(git restore:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(npm run build:*)",
+      "Bash(firebase functions:log:*)",
+      "Bash(open:*)",
+      "Bash(lsof:*)",
+      "Bash(npx vite build)",
+      "Bash(npx shadcn@latest add alert-dialog)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

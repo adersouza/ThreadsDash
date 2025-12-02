@@ -25,7 +25,7 @@ interface PostingResult {
 }
 
 /**
- * Rate limiter
+ * Rate limiter (in-memory - basic implementation)
  */
 class RateLimiter {
   private static instance: RateLimiter;
@@ -99,10 +99,64 @@ export async function postToThreadsOfficialApi(
   try {
     const token = await decrypt(accessToken);
 
+    // Prepare content with hashtags from topics
+    let finalContent = postData.content || '';
+
+    // Add hashtags from topics if they exist and aren't already in the content
+    if (postData.topics && postData.topics.length > 0) {
+      const hashtags = postData.topics
+        .map(topic => {
+          const originalTopic = topic.trim();
+          if (!originalTopic) return null;
+
+          // Convert multi-word topics to camelCase for hashtags
+          // e.g., "arkham knight" -> "ArkhamKnight"
+          const words = originalTopic.split(/\s+/);
+          let cleanTopic;
+
+          if (words.length > 1) {
+            // Multi-word: capitalize each word and join (camelCase)
+            cleanTopic = words
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+              .join('');
+          } else {
+            // Single word: just remove special chars
+            cleanTopic = originalTopic.replace(/[^a-zA-Z0-9_]/g, '');
+          }
+
+          if (!cleanTopic) return null;
+
+          const hashtagWithHash = `#${cleanTopic}`;
+
+          // Check if hashtag or topic text already exists in content (case insensitive)
+          const contentLower = finalContent.toLowerCase();
+          const topicLower = originalTopic.toLowerCase();
+          const hashtagLower = hashtagWithHash.toLowerCase();
+
+          // Don't add if:
+          // 1. The hashtag is already in content: "#arkhamknight"
+          // 2. The topic text is already in content: "arkham knight" or "arkhamknight"
+          if (contentLower.includes(hashtagLower) ||
+              contentLower.includes(topicLower.replace(/\s+/g, '')) ||
+              contentLower.includes(topicLower)) {
+            return null;
+          }
+
+          return hashtagWithHash;
+        })
+        .filter(Boolean);
+
+      // Append hashtags to content with a newline if there are any new ones
+      if (hashtags.length > 0) {
+        finalContent = `${finalContent}\n\n${hashtags.join(' ')}`.trim();
+      }
+    }
+
     console.log('Creating Threads post container...');
     console.log('User ID:', threadsUserId);
     console.log('Token (first 10 chars):', token.substring(0, 10));
-    console.log('Post content:', postData.content);
+    console.log('Post content:', finalContent);
+    console.log('Topics:', postData.topics);
     console.log('Media count:', postData.media?.length || 0);
 
     // First, verify the token by checking the user's permissions
@@ -178,7 +232,7 @@ export async function postToThreadsOfficialApi(
       containerParams = new URLSearchParams({
         media_type: 'CAROUSEL',
         children: mediaContainerIds.join(','),
-        text: postData.content,
+        text: finalContent,
         access_token: token,
       });
 
@@ -201,7 +255,7 @@ export async function postToThreadsOfficialApi(
         containerParams = new URLSearchParams({
           media_type: 'IMAGE',
           image_url: spoofedUrl,
-          text: postData.content,
+          text: finalContent,
           access_token: token,
         });
       } else {
@@ -212,7 +266,7 @@ export async function postToThreadsOfficialApi(
         containerParams = new URLSearchParams({
           media_type: mediaType,
           [mediaKey]: firstMedia.url,
-          text: postData.content,
+          text: finalContent,
           access_token: token,
         });
       }
@@ -220,9 +274,17 @@ export async function postToThreadsOfficialApi(
       // TEXT-ONLY POST
       containerParams = new URLSearchParams({
         media_type: 'TEXT',
-        text: postData.content,
+        text: finalContent,
         access_token: token,
       });
+    }
+
+    // Add reply controls if specified
+    if (postData.settings.whoCanReply && postData.settings.whoCanReply !== 'everyone') {
+      const replyControl = postData.settings.whoCanReply === 'followers'
+        ? 'accounts_you_follow'
+        : 'mentioned_only';
+      containerParams.append('reply_control', replyControl);
     }
 
     console.log('Request URL:', `https://graph.threads.net/v1.0/${threadsUserId}/threads`);

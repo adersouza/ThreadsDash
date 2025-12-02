@@ -18,7 +18,9 @@ export interface Model {
   updatedAt: Date;
 }
 
-// Threads Account Types
+// Threads Account Types (Client-Safe)
+// Tokens are intentionally excluded from this interface
+// They are stored in Firestore but never exposed to client-side code
 export interface ThreadsAccount {
   id: string;
   userId: string; // Firebase user ID who owns this account
@@ -33,14 +35,18 @@ export interface ThreadsAccount {
   createdAt: Date;
   lastSyncedAt: Date;
   status: 'active' | 'inactive' | 'suspended' | 'pending';
-  accessToken?: string; // Encrypted access token for Threads API
-  refreshToken?: string; // Encrypted refresh token
 
-  // OAuth Credentials (Official Threads API)
-  threadsAccessToken?: string; // Encrypted Threads access token
+  // OAuth Metadata (tokens stored server-side only)
   threadsUserId?: string; // Threads user ID
   tokenExpiresAt?: Date; // When the access token expires
   lastPostAt?: Date; // Last time a post was published (for rate limiting)
+
+  // Instagram/Unofficial API metadata
+  instagramUserId?: string; // Instagram user ID
+  instagramToken?: string; // Encrypted Instagram session token (legacy)
+
+  // Posting method
+  postingMethod?: 'oauth' | 'unofficial'; // Preferred posting method
 
   // Rate Limiting Tracking
   postsLastHour?: number; // Number of posts in the last hour
@@ -54,6 +60,14 @@ export interface ThreadsAccount {
 
   // Model Association
   modelIds?: string[]; // Array of model IDs this account belongs to
+}
+
+// Server-Side Account Type (includes sensitive tokens)
+// Used only in Cloud Functions - never exposed to client
+export interface ThreadsAccountWithTokens extends ThreadsAccount {
+  accessToken?: string; // Encrypted access token (legacy/unofficial API)
+  refreshToken?: string; // Encrypted refresh token (legacy)
+  threadsAccessToken?: string; // Encrypted Threads OAuth access token
 }
 
 // Post Types
@@ -276,4 +290,5 @@ export interface QueuedPost {
   scheduledFor?: Date; // Assigned time slot
   addedToQueueAt: Date;
 }
+
 

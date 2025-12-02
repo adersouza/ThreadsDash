@@ -7,7 +7,10 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { decrypt } from './encryption';
 
-const db = admin.firestore();
+// Lazy initialization to avoid timeout during deployment
+function getDb() {
+  return admin.firestore();
+}
 
 /**
  * Delete a post from Threads using the official API
@@ -27,7 +30,7 @@ export const deleteThreadsPost = functions.https.onCall(async (data, context) =>
 
   try {
     // Get the post document
-    const postRef = db.collection('users').doc(userId).collection('posts').doc(postId);
+    const postRef = getDb().collection('users').doc(userId).collection('posts').doc(postId);
     const postDoc = await postRef.get();
 
     if (!postDoc.exists) {
@@ -53,7 +56,7 @@ export const deleteThreadsPost = functions.https.onCall(async (data, context) =>
       console.log(`Post ${postId} doesn't have threadId, looking up in activity log...`);
 
       // Try to find threadId in activity log
-      const activityQuery = await db
+      const activityQuery = await getDb()
         .collection('users')
         .doc(userId)
         .collection('activity')
@@ -74,7 +77,7 @@ export const deleteThreadsPost = functions.https.onCall(async (data, context) =>
     }
 
     // Get account credentials
-    const accountRef = db.collection('users').doc(userId).collection('accounts').doc(postData.accountId);
+    const accountRef = getDb().collection('users').doc(userId).collection('accounts').doc(postData.accountId);
     const accountDoc = await accountRef.get();
 
     if (!accountDoc.exists) {
@@ -116,7 +119,7 @@ export const deleteThreadsPost = functions.https.onCall(async (data, context) =>
     });
 
     // Log activity
-    await db.collection('users').doc(userId).collection('activity').add({
+    await getDb().collection('users').doc(userId).collection('activity').add({
       type: 'post_deleted',
       postId: postId,
       threadId: threadId,

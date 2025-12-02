@@ -16,12 +16,23 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Allow public read access for temporary spoofed images
-    // (needed for Threads API to download images)
+    // Temporary files - restricted access with time-based expiration
+    // These are used for image processing before upload to Threads API
     match /temp/{userId}/{fileName} {
-      allow read: if true;  // Public read access
-      allow write: if false;  // Only Cloud Functions can write here
-      allow delete: if false;  // Only Cloud Functions can delete
+      // Only allow read if:
+      // 1. User is authenticated and owns the file, OR
+      // 2. File was created within the last 1 hour (3600000ms)
+      allow read: if (request.auth != null && request.auth.uid == userId) ||
+                     (resource.timeCreated > request.time - duration.value(1, 'h'));
+
+      // Only authenticated users can create temp files in their own folder
+      allow create: if request.auth != null &&
+                       request.auth.uid == userId &&
+                       request.resource.size < 50 * 1024 * 1024 &&  // 50MB limit
+                       request.resource.contentType.matches('image/.*|video/.*');
+
+      // Only the owner or Cloud Functions can delete
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

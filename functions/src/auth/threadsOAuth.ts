@@ -4,8 +4,12 @@ import fetch from 'node-fetch';
 import { encrypt } from '../encryption';
 
 const THREADS_APP_ID = '1620825335945838';
-const THREADS_APP_SECRET = functions.config().threads?.app_secret || process.env.THREADS_APP_SECRET;
 const REDIRECT_URI = 'https://threadsdash.web.app/auth/threads/callback';
+
+// Lazy initialization to avoid timeout during deployment
+function getThreadsAppSecret(): string | undefined {
+  return functions.config().threads?.app_secret || process.env.THREADS_APP_SECRET;
+}
 
 interface ThreadsTokenResponse {
   access_token: string;
@@ -33,6 +37,8 @@ export const exchangeThreadsToken = functions.https.onCall(async (data, context)
   if (!code) {
     throw new functions.https.HttpsError('invalid-argument', 'Authorization code is required');
   }
+
+  const THREADS_APP_SECRET = getThreadsAppSecret();
 
   if (!THREADS_APP_SECRET) {
     throw new functions.https.HttpsError('internal', 'Threads app secret not configured');

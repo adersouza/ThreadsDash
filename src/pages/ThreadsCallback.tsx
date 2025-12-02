@@ -14,8 +14,9 @@ export const ThreadsCallback = () => {
 
   useEffect(() => {
     const handleCallback = async () => {
-      // Get authorization code from URL
+      // Get authorization code and state from URL
       const code = searchParams.get('code');
+      const state = searchParams.get('state');
       const errorParam = searchParams.get('error');
       const errorDescription = searchParams.get('error_description');
 
@@ -35,6 +36,33 @@ export const ThreadsCallback = () => {
         setStatus('error');
         setError('You must be logged in');
         return;
+      }
+
+      // Verify CSRF state parameter
+      const storedState = sessionStorage.getItem('threads_oauth_state');
+      const storedStateTime = sessionStorage.getItem('threads_oauth_state_time');
+
+      // Clear stored state immediately after reading
+      sessionStorage.removeItem('threads_oauth_state');
+      sessionStorage.removeItem('threads_oauth_state_time');
+
+      if (!storedState || !state || storedState !== state) {
+        setStatus('error');
+        setError('Security verification failed. Please try connecting again.');
+        console.error('CSRF state mismatch or missing');
+        return;
+      }
+
+      // Verify state was created recently (within 10 minutes)
+      if (storedStateTime) {
+        const stateAge = Date.now() - parseInt(storedStateTime, 10);
+        const maxAge = 10 * 60 * 1000; // 10 minutes
+        if (stateAge > maxAge) {
+          setStatus('error');
+          setError('Authorization session expired. Please try connecting again.');
+          console.error('OAuth state expired');
+          return;
+        }
       }
 
       try {

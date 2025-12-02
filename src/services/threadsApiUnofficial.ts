@@ -12,7 +12,7 @@
 
 import type { ThreadsAccount, PostingResult } from '@/types';
 import type { Post } from '@/types/post';
-import { decrypt, decryptSync } from './encryption';
+import { decrypt } from './encryption';
 import { authenticator } from 'otplib';
 
 interface InstagramLoginResponse {
@@ -462,7 +462,7 @@ export async function getThreadsPostInsights(
       throw new Error('Instagram token not found for account');
     }
 
-    const token = decryptSync(account.instagramToken);
+    const token = await decrypt(account.instagramToken);
 
     const response = await fetch(`https://i.instagram.com/api/v1/media/${threadId}/info/`, {
       method: 'GET',
@@ -524,7 +524,7 @@ function extractSessionToken(cookies: string | null): string {
  */
 export function canUseApiMethod(account: ThreadsAccount): boolean {
   return !!(
-    account.postingMethod === 'api' &&
+    account.postingMethod === 'unofficial' &&
     account.instagramToken &&
     account.instagramUserId
   );

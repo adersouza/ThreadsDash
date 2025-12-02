@@ -195,7 +195,9 @@ export const AccountCard = ({ account }: AccountCardProps) => {
                     <DropdownMenuCheckboxItem
                       key={model.id}
                       checked={assignedModelIds.includes(model.id)}
-                      onCheckedChange={() => handleToggleModel(model.id)}
+                      onCheckedChange={() => {
+                        handleToggleModel(model.id);
+                      }}
                       onSelect={(e) => e.preventDefault()}
                     >
                       <Folder

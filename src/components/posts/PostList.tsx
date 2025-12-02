@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,7 +52,7 @@ import {
   Copy,
   Trash2,
   Search,
-
+  FileText,
   Loader2,
   Calendar,
   Image as ImageIcon,
@@ -320,8 +321,8 @@ export const PostList = () => {
         </Card>
       )}
 
-      {/* Posts Table */}
-      <Card>
+      {/* Posts Table - Desktop */}
+      <Card className="hidden md:block">
         {filteredPosts.length > 0 ? (
           <Table>
             <TableHeader>
@@ -449,15 +450,134 @@ export const PostList = () => {
             </TableBody>
           </Table>
         ) : (
-          <div className="p-8 text-center">
-            <p className="text-muted-foreground">
-              {posts.length === 0
-                ? 'No posts yet. Create your first post!'
-                : 'No posts match your filters.'}
-            </p>
-          </div>
+          <EmptyState
+            icon={FileText}
+            title={posts.length === 0 ? 'No Posts Yet' : 'No Matching Posts'}
+            description={
+              posts.length === 0
+                ? 'Create your first post to get started with content management.'
+                : 'Try adjusting your filters to see more posts.'
+            }
+            action={
+              posts.length === 0
+                ? {
+                    label: 'Create Your First Post',
+                    onClick: () => setComposerOpen(true),
+                  }
+                : undefined
+            }
+          />
         )}
       </Card>
+
+      {/* Posts Cards - Mobile */}
+      <div className="md:hidden space-y-3">
+        {filteredPosts.length > 0 ? (
+          filteredPosts.map((post) => {
+            const account = getAccount(post.accountId);
+            return (
+              <Card key={post.id} className="p-4">
+                <div className="space-y-3">
+                  {/* Header: Status and Checkbox */}
+                  <div className="flex items-center justify-between">
+                    <Badge variant={statusConfig[post.status].variant}>
+                      {statusConfig[post.status].label}
+                    </Badge>
+                    <Checkbox
+                      checked={selectedPosts.has(post.id)}
+                      onCheckedChange={() => togglePostSelection(post.id)}
+                    />
+                  </div>
+
+                  {/* Content */}
+                  <div className="space-y-1">
+                    <p className="text-sm line-clamp-3">
+                      {post.content || (
+                        <span className="text-muted-foreground italic">
+                          No content
+                        </span>
+                      )}
+                    </p>
+                    {post.media.length > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <ImageIcon className="h-3 w-3" />
+                        {post.media.length} media file{post.media.length !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Account Info */}
+                  {account && (
+                    <div className="text-sm">
+                      <div className="font-medium">{account.displayName}</div>
+                      <div className="text-muted-foreground text-xs">@{account.username}</div>
+                    </div>
+                  )}
+
+                  {/* Schedule/Published Date */}
+                  {post.scheduledFor && (
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      {format(post.scheduledFor, 'MMM d, yyyy')} at {format(post.scheduledFor, 'h:mm a')}
+                    </div>
+                  )}
+                  {!post.scheduledFor && post.publishedAt && (
+                    <div className="text-sm text-muted-foreground">
+                      Published {format(post.publishedAt, 'MMM d, yyyy')}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleEditPost(post)}
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDuplicatePost()}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeletePost(post)}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        ) : (
+          <EmptyState
+            icon={FileText}
+            title={posts.length === 0 ? 'No Posts Yet' : 'No Matching Posts'}
+            description={
+              posts.length === 0
+                ? 'Create your first post to get started with content management.'
+                : 'Try adjusting your filters to see more posts.'
+            }
+            action={
+              posts.length === 0
+                ? {
+                    label: 'Create Your First Post',
+                    onClick: () => setComposerOpen(true),
+                  }
+                : undefined
+            }
+          />
+        )}
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

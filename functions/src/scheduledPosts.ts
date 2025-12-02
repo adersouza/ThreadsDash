@@ -10,7 +10,10 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { postToThreadsOfficialApi } from './posting/threadsApi';
 
-const db = admin.firestore();
+// Lazy initialization to avoid timeout during deployment
+function getDb() {
+  return admin.firestore();
+}
 
 interface Post {
   id: string;
@@ -56,7 +59,7 @@ async function canPostSafely(
   userId: string,
   accountId: string
 ): Promise<{ canPost: boolean; reason?: string; nextAvailableTime?: Date }> {
-  const accountRef = db.collection('users').doc(userId).collection('accounts').doc(accountId);
+  const accountRef = getDb().collection('users').doc(userId).collection('accounts').doc(accountId);
   const accountDoc = await accountRef.get();
 
   if (!accountDoc.exists) {
@@ -132,7 +135,7 @@ async function canPostSafely(
  * Update account rate limiting counters
  */
 async function updateRateLimitCounters(userId: string, accountId: string): Promise<void> {
-  const accountRef = db.collection('users').doc(userId).collection('accounts').doc(accountId);
+  const accountRef = getDb().collection('users').doc(userId).collection('accounts').doc(accountId);
   const accountDoc = await accountRef.get();
 
   if (!accountDoc.exists) return;
@@ -203,7 +206,7 @@ async function postToThreads(account: Account, post: Post): Promise<{
  * Process a single scheduled post
  */
 async function processPost(userId: string, postId: string): Promise<void> {
-  const postRef = db.collection('users').doc(userId).collection('posts').doc(postId);
+  const postRef = getDb().collection('users').doc(userId).collection('posts').doc(postId);
   const postDoc = await postRef.get();
 
   if (!postDoc.exists) {
@@ -214,7 +217,7 @@ async function processPost(userId: string, postId: string): Promise<void> {
   const post = { id: postDoc.id, ...postDoc.data() } as Post;
 
   // Get account details
-  const accountRef = db.collection('users').doc(userId).collection('accounts').doc(post.accountId);
+  const accountRef = getDb().collection('users').doc(userId).collection('accounts').doc(post.accountId);
   const accountDoc = await accountRef.get();
 
   if (!accountDoc.exists) {
@@ -261,7 +264,7 @@ async function processPost(userId: string, postId: string): Promise<void> {
     console.log(`Post ${postId} published successfully`);
 
     // Log activity
-    await db.collection('users').doc(userId).collection('activity').add({
+    await getDb().collection('users').doc(userId).collection('activity').add({
       type: 'post_published',
       postId: postId,
       accountId: post.accountId,
@@ -277,7 +280,7 @@ async function processPost(userId: string, postId: string): Promise<void> {
     console.log(`Post ${postId} failed: ${result.error}`);
 
     // Log error
-    await db.collection('users').doc(userId).collection('activity').add({
+    await getDb().collection('users').doc(userId).collection('activity').add({
       type: 'post_failed',
       postId: postId,
       accountId: post.accountId,
@@ -301,13 +304,13 @@ export const processScheduledPosts = functions
 
     try {
       // Query all users
-      const usersSnapshot = await db.collection('users').get();
+      const usersSnapshot = await getDb().collection('users').get();
 
       for (const userDoc of usersSnapshot.docs) {
         const userId = userDoc.id;
 
         // Query scheduled posts for this user
-        const postsSnapshot = await db
+        const postsSnapshot = await getDb()
           .collection('users')
           .doc(userId)
           .collection('posts')

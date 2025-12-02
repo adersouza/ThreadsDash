@@ -7,12 +7,14 @@ import { usePosts } from '@/hooks/usePosts';
 import { useModels } from '@/hooks/useModels';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { AccountCard } from '@/components/dashboard/AccountCard';
 import { ModelFilter } from '@/components/dashboard/ModelFilter';
 import { PostComposer } from '@/components/posts/PostComposer';
 import { AccountModal } from '@/components/dashboard/AccountModal';
-import { Plus, Loader2, FileText, Calendar, Edit } from 'lucide-react';
+import { Plus, FileText, Calendar, Edit, Users } from 'lucide-react';
 
 export const Dashboard = () => {
   const { accounts, loading, error } = useAccountStore();
@@ -44,10 +46,41 @@ export const Dashboard = () => {
   // Show loading state
   if (loading || !isInitialized) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading accounts...</p>
+      <div className="flex-1 space-y-6 p-6 md:p-8">
+        {/* Stats Skeleton */}
+        <div className="grid gap-4 md:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4 rounded-full" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16 mb-1" />
+                <Skeleton className="h-3 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Account Cards Skeleton */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <div className="flex items-center space-x-4">
+                  <Skeleton className="h-12 w-12 rounded-full" />
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-20 w-full" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     );
@@ -160,24 +193,15 @@ export const Dashboard = () => {
               ))}
             </div>
           ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>No Accounts Connected</CardTitle>
-              <CardDescription>
-                Get started by connecting your first Threads account
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Connect your Threads account to start managing your content,
-                tracking analytics, and scheduling posts.
-              </p>
-              <Button onClick={() => setAccountModalOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Connect Your First Account
-              </Button>
-            </CardContent>
-            </Card>
+            <EmptyState
+              icon={Users}
+              title="No Accounts Connected"
+              description="Connect your Threads account to start managing your content, tracking analytics, and scheduling posts."
+              action={{
+                label: 'Connect Your First Account',
+                onClick: () => setAccountModalOpen(true),
+              }}
+            />
           )}
         </div>
 
@@ -186,8 +210,9 @@ export const Dashboard = () => {
           size="lg"
           className="fixed bottom-8 right-8 h-14 w-14 rounded-full shadow-lg"
           onClick={() => setComposerOpen(true)}
+          aria-label="Create new post"
         >
-          <Plus className="h-6 w-6" />
+          <Plus className="h-6 w-6" aria-hidden="true" />
         </Button>
 
         {/* Modals */}

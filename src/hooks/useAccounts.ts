@@ -50,15 +50,24 @@ export const useAccounts = () => {
             createdAt: data.createdAt?.toDate() || new Date(),
             lastSyncedAt: data.lastSyncedAt?.toDate() || new Date(),
             status: data.status || 'active',
-            accessToken: data.accessToken,
-            refreshToken: data.refreshToken,
-            threadsAccessToken: data.threadsAccessToken,
+            // OAuth metadata (tokens are NOT included - server-side only)
             threadsUserId: data.threadsUserId,
             tokenExpiresAt: data.tokenExpiresAt?.toDate(),
             lastPostAt: data.lastPostAt?.toDate(),
+            // Instagram/Unofficial API
+            instagramUserId: data.instagramUserId,
+            instagramToken: data.instagramToken, // Encrypted token (legacy)
+            // Posting method
+            postingMethod: data.postingMethod,
+            // Rate limiting
             postsLastHour: data.postsLastHour,
             postsToday: data.postsToday,
             rateLimitResetAt: data.rateLimitResetAt?.toDate(),
+            // Analytics baseline
+            baselineFollowersCount: data.baselineFollowersCount,
+            baselineFollowingCount: data.baselineFollowingCount,
+            baselinePostsCount: data.baselinePostsCount,
+            // Model association
             modelIds: data.modelIds || [],
           });
         });

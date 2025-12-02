@@ -8,15 +8,32 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      'playwright-core': path.resolve(__dirname, './src/shims/playwright-core.ts'),
     },
-  },
-  optimizeDeps: {
-    exclude: ['playwright-core'],
   },
   build: {
+    // Speed up build by splitting vendor chunks
     rollupOptions: {
-      external: ['playwright-core'],
+      output: {
+        manualChunks: {
+          // Split large dependencies into separate chunks
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-firebase': ['firebase'],
+          'vendor-ui': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-select',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-toast',
+          ],
+          'vendor-charts': ['recharts', 'react-big-calendar'],
+        },
+      },
     },
+    // Increase chunk size warning limit (Firebase is large)
+    chunkSizeWarningLimit: 1000,
+    // Use esbuild for minification (faster than terser)
+    minify: 'esbuild',
+    // Target modern browsers for smaller output
+    target: 'es2020',
   },
 })

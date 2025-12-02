@@ -14,13 +14,30 @@ interface AccountModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/**
+ * Generate a cryptographically secure random state parameter for CSRF protection
+ */
+function generateSecureState(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 export const AccountModal = ({ open, onOpenChange }: AccountModalProps) => {
   const handleOAuthConnect = () => {
+    // Generate random state parameter for CSRF protection
+    const state = generateSecureState();
+
+    // Store state in sessionStorage for verification in callback
+    sessionStorage.setItem('threads_oauth_state', state);
+    sessionStorage.setItem('threads_oauth_state_time', Date.now().toString());
+
     const authUrl = new URL('https://threads.net/oauth/authorize');
     authUrl.searchParams.set('client_id', '1620825335945838');
     authUrl.searchParams.set('redirect_uri', 'https://threadsdash.web.app/auth/threads/callback');
     authUrl.searchParams.set('scope', 'threads_basic,threads_content_publish,threads_manage_insights,threads_delete');
     authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('state', state);
     window.location.href = authUrl.toString();
   };
 

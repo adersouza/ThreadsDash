@@ -9,6 +9,7 @@ import { db, functions } from '@/services/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccountStore } from '@/store/accountStore';
 import { usePostStore } from '@/store/postStore';
+import { useModelStore } from '@/store/modelStore';
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,7 @@ export const PostComposer = ({
 }: PostComposerProps) => {
   const { currentUser } = useAuth();
   const { accounts } = useAccountStore();
+  const { models } = useModelStore();
   const { addPost, updatePost } = usePostStore();
   const { toast } = useToast();
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -78,6 +80,7 @@ export const PostComposer = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
+  const [selectedModelId, setSelectedModelId] = useState<string>('');
 
   const {
     control,
@@ -102,6 +105,14 @@ export const PostComposer = ({
     (acc) => acc.id === watchedFields.accountId
   );
 
+  // Filter accounts based on selected model
+  const filteredAccounts = selectedModelId
+    ? accounts.filter(
+        (account) =>
+          account.modelIds && account.modelIds.includes(selectedModelId)
+      )
+    : accounts;
+
   // Load edit post data or prefilled scheduled date
   useEffect(() => {
     if (editPost && open) {
@@ -119,15 +130,24 @@ export const PostComposer = ({
       reset();
       setMedia([]);
       setTopicInput('');
+      setSelectedModelId('');
     }
   }, [editPost, prefilledScheduledDate, open, setValue, reset]);
 
 
   const addTopic = () => {
     const topic = topicInput.trim().replace(/^#/, '');
-    if (topic && !watchedFields.topics.includes(topic)) {
-      setValue('topics', [...watchedFields.topics, topic]);
+    if (topic && topic.length > 0 && !watchedFields.topics.includes(topic)) {
+      const currentTopics = watchedFields.topics || [];
+      setValue('topics', [...currentTopics, topic]);
       setTopicInput('');
+      console.log('Topic added:', topic, 'Current topics:', [...currentTopics, topic]);
+    } else {
+      console.log('Topic not added. Reason:', {
+        isEmpty: !topic,
+        isDuplicate: watchedFields.topics?.includes(topic),
+        input: topicInput
+      });
     }
   };
 
@@ -428,7 +448,7 @@ export const PostComposer = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0">
+      <DialogContent className="max-w-2xl md:max-w-7xl h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle>
             {editPost ? 'Edit Post' : 'Create New Post'}
@@ -439,6 +459,32 @@ export const PostComposer = ({
           {/* Form Section */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* Model Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="model">Model</Label>
+                <Select
+                  value={selectedModelId}
+                  onValueChange={(value) => {
+                    setSelectedModelId(value);
+                    // Reset account selection when model changes
+                    setValue('accountId', '');
+                  }}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger id="model">
+                    <SelectValue placeholder="All Accounts" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Accounts</SelectItem>
+                    {models.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Account Selection */}
               <div className="space-y-2">
                 <Label htmlFor="account">Account *</Label>
@@ -455,7 +501,7 @@ export const PostComposer = ({
                         <SelectValue placeholder="Select account to post from" />
                       </SelectTrigger>
                       <SelectContent>
-                        {accounts.map((account) => (
+                        {filteredAccounts.map((account) => (
                           <SelectItem key={account.id} value={account.id}>
                             <div className="flex items-center gap-2">
                               <span>@{account.username}</span>
@@ -560,7 +606,7 @@ export const PostComposer = ({
                     Add
                   </Button>
                 </div>
-                {watchedFields.topics.length > 0 && (
+                {watchedFields.topics && watchedFields.topics.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {watchedFields.topics.map((topic) => (
                       <Badge key={topic} variant="secondary">
@@ -697,44 +743,53 @@ export const PostComposer = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t bg-muted/10 flex items-center justify-between flex-shrink-0">
+        <div className="px-4 sm:px-6 py-4 border-t bg-muted/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-0 flex-shrink-0">
           <Button
             type="button"
             variant="ghost"
             onClick={() => setShowPreview(!showPreview)}
+            className="hidden lg:flex"
           >
             {showPreview ? 'Hide' : 'Show'} Preview
           </Button>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Button
               type="button"
               variant="outline"
               onClick={saveDraft}
               disabled={isSubmitting || isOverLimit}
+              size="lg"
+              className="w-full sm:w-auto h-11 sm:h-10"
             >
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Save className="h-4 w-4 mr-2" />
               )}
-              Save Draft
+              <span className="hidden sm:inline">Save Draft</span>
+              <span className="sm:hidden">Draft</span>
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={addToQueue}
               disabled={isSubmitting || isOverLimit || !watchedFields.accountId}
+              size="lg"
+              className="w-full sm:w-auto h-11 sm:h-10"
             >
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Clock className="h-4 w-4 mr-2" />
               )}
-              Add to Queue
+              <span className="hidden sm:inline">Add to Queue</span>
+              <span className="sm:hidden">Queue</span>
             </Button>
             <Button
               onClick={handleSubmit(onSubmit)}
               disabled={isSubmitting || isOverLimit}
+              size="lg"
+              className="w-full sm:w-auto h-11 sm:h-10"
             >
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

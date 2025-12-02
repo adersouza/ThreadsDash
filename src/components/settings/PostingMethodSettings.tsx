@@ -2,44 +2,30 @@
  * Posting Method Settings Component
  *
  * Allows users to configure how posts are published:
- * - Browser automation via AdsPower
+ * - OAuth (official Threads API)
  * - Unofficial Instagram/Threads API
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/services/firebase';
-import {
-  getAdsPowerProfiles,
-  testAdsPowerConnection,
-} from '@/services/adsPowerService';
 import { loginToInstagram } from '@/services/threadsApiUnofficial';
-import { encryptSync } from '@/services/encryption';
+import { encrypt } from '@/services/encryption';
 import {
-  Chrome,
   Zap,
   AlertCircle,
   CheckCircle2,
   Loader2,
   Shield,
-  Clock,
 } from 'lucide-react';
-import type { ThreadsAccount, AdsPowerProfile } from '@/types';
+import type { ThreadsAccount } from '@/types';
 
 interface PostingMethodSettingsProps {
   account: ThreadsAccount;
@@ -50,59 +36,33 @@ export const PostingMethodSettings = ({ account, onUpdate }: PostingMethodSettin
   const { currentUser } = useAuth();
   const { toast } = useToast();
 
-  const [postingMethod, setPostingMethod] = useState<'browser' | 'api'>(
-    account.postingMethod || 'browser'
+  const [postingMethod, setPostingMethod] = useState<'oauth' | 'unofficial'>(
+    account.postingMethod === 'oauth' ? 'oauth' : 'unofficial'
   );
-  const [adsPowerProfiles, setAdsPowerProfiles] = useState<AdsPowerProfile[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState(account.adsPowerProfileId || '');
   const [instagramUsername, setInstagramUsername] = useState('');
   const [instagramPassword, setInstagramPassword] = useState('');
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [adsPowerStatus, setAdsPowerStatus] = useState<'unknown' | 'connected' | 'disconnected'>(
-    'unknown'
-  );
-
-  // Load AdsPower profiles on mount
-  useEffect(() => {
-    loadAdsPowerProfiles();
-    checkAdsPowerConnection();
-  }, []);
-
-  const loadAdsPowerProfiles = async () => {
-    const result = await getAdsPowerProfiles();
-    if (result.success && result.profiles) {
-      setAdsPowerProfiles(result.profiles);
-    }
-  };
-
-  const checkAdsPowerConnection = async () => {
-    const result = await testAdsPowerConnection();
-    setAdsPowerStatus(result.success ? 'connected' : 'disconnected');
-  };
 
   const handleTestConnection = async () => {
     setIsTestingConnection(true);
 
     try {
-      if (postingMethod === 'browser') {
-        // Test AdsPower connection
-        const result = await testAdsPowerConnection();
-        if (result.success) {
+      if (postingMethod === 'oauth') {
+        // OAuth method - check if token exists
+        if (account.threadsUserId) {
           toast({
-            title: 'Connection successful',
-            description: `AdsPower is running (version ${result.version || 'unknown'})`,
+            title: 'OAuth configured',
+            description: 'Threads OAuth is already set up for this account',
           });
-          setAdsPowerStatus('connected');
         } else {
           toast({
-            title: 'Connection failed',
-            description: result.error || 'Could not connect to AdsPower',
+            title: 'OAuth not configured',
+            description: 'Please connect your Threads account via OAuth',
             variant: 'destructive',
           });
-          setAdsPowerStatus('disconnected');
         }
-      } else if (postingMethod === 'api') {
+      } else if (postingMethod === 'unofficial') {
         // Check if credentials already configured
         if (account.instagramToken && account.instagramUserId) {
           toast({
@@ -157,18 +117,7 @@ export const PostingMethodSettings = ({ account, onUpdate }: PostingMethodSettin
         postingMethod,
       };
 
-      if (postingMethod === 'browser') {
-        if (!selectedProfileId) {
-          toast({
-            title: 'Profile required',
-            description: 'Please select an AdsPower profile',
-            variant: 'destructive',
-          });
-          setIsSaving(false);
-          return;
-        }
-        updates.adsPowerProfileId = selectedProfileId;
-      } else if (postingMethod === 'api') {
+      if (postingMethod === 'unofficial') {
         // Check if credentials already exist from account setup
         if (account.instagramToken && account.instagramUserId) {
           // Credentials already configured, just update posting method
@@ -198,7 +147,7 @@ export const PostingMethodSettings = ({ account, onUpdate }: PostingMethodSettin
           }
 
           // Encrypt and save token
-          const encryptedToken = encryptSync(loginResult.token);
+          const encryptedToken = await encrypt(loginResult.token);
           updates.instagramToken = encryptedToken;
           updates.instagramUserId = loginResult.userId;
         }
@@ -247,46 +196,45 @@ export const PostingMethodSettings = ({ account, onUpdate }: PostingMethodSettin
           <div className="space-y-4">
             <Label>Select Posting Method</Label>
             <div className="grid gap-4 sm:grid-cols-2">
-              {/* Browser Method Card */}
+              {/* OAuth Method Card */}
               <div
-                onClick={() => setPostingMethod('browser')}
+                onClick={() => setPostingMethod('oauth')}
                 className={`relative cursor-pointer rounded-lg border-2 p-4 transition-all ${
-                  postingMethod === 'browser'
+                  postingMethod === 'oauth'
                     ? 'border-primary bg-primary/5'
                     : 'border-muted hover:border-primary/50'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <Chrome className="h-6 w-6 text-primary mt-1" />
+                  <Shield className="h-6 w-6 text-primary mt-1" />
                   <div className="flex-1">
-                    <h3 className="font-semibold mb-1">Browser Automation</h3>
+                    <h3 className="font-semibold mb-1">OAuth (Official)</h3>
                     <p className="text-sm text-muted-foreground mb-3">
-                      Uses real browser with AdsPower profiles. Safest method, bypasses bot
-                      detection.
+                      Official Threads API via OAuth. Safest and most reliable method.
                     </p>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 text-sm">
                         <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <span>Most realistic</span>
+                        <span>Official API</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <CheckCircle2 className="h-4 w-4 text-green-500" />
                         <span>Safest for account</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
-                        <Clock className="h-4 w-4 text-yellow-500" />
-                        <span>Slower (~30s per post)</span>
+                        <Zap className="h-4 w-4 text-blue-500" />
+                        <span>Fast (~2s)</span>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* API Method Card */}
+              {/* Unofficial API Method Card */}
               <div
-                onClick={() => setPostingMethod('api')}
+                onClick={() => setPostingMethod('unofficial')}
                 className={`relative cursor-pointer rounded-lg border-2 p-4 transition-all ${
-                  postingMethod === 'api'
+                  postingMethod === 'unofficial'
                     ? 'border-primary bg-primary/5'
                     : 'border-muted hover:border-primary/50'
                 }`}
@@ -319,63 +267,32 @@ export const PostingMethodSettings = ({ account, onUpdate }: PostingMethodSettin
           </div>
 
           {/* Configuration based on selected method */}
-          {postingMethod === 'browser' && (
+          {postingMethod === 'oauth' && (
             <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-              <div className="flex items-center justify-between">
-                <Label>AdsPower Status</Label>
-                <Badge
-                  variant={adsPowerStatus === 'connected' ? 'default' : 'destructive'}
-                >
-                  {adsPowerStatus === 'connected' ? 'Connected' : 'Disconnected'}
-                </Badge>
-              </div>
-
-              {adsPowerStatus === 'disconnected' && (
+              {account.threadsUserId ? (
+                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                      OAuth connected
+                    </span>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Your Threads account is connected via OAuth. This is the recommended method.
+                    </p>
+                  </div>
+                </div>
+              ) : (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    AdsPower is not running. Please start AdsPower application first.
+                    OAuth is not configured for this account. Please connect your Threads account via OAuth when adding the account.
                   </AlertDescription>
                 </Alert>
               )}
-
-              <div className="space-y-2">
-                <Label htmlFor="adspower-profile">AdsPower Profile</Label>
-                <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
-                  <SelectTrigger id="adspower-profile">
-                    <SelectValue placeholder="Select AdsPower profile" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {adsPowerProfiles.length === 0 ? (
-                      <SelectItem value="none" disabled>
-                        No profiles found
-                      </SelectItem>
-                    ) : (
-                      adsPowerProfiles.map((profile) => (
-                        <SelectItem key={profile.id} value={profile.id}>
-                          {profile.name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">
-                  Select the AdsPower profile to use for posting. Make sure you're logged into
-                  Threads in this profile.
-                </p>
-              </div>
-
-              <Button
-                variant="outline"
-                onClick={loadAdsPowerProfiles}
-                className="w-full"
-              >
-                Refresh Profiles
-              </Button>
             </div>
           )}
 
-          {postingMethod === 'api' && (
+          {postingMethod === 'unofficial' && (
             <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />

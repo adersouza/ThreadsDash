@@ -9,7 +9,10 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { decrypt } from './encryption';
 
-const db = admin.firestore();
+// Lazy initialization to avoid timeout during deployment
+function getDb() {
+  return admin.firestore();
+}
 
 interface ThreadsPost {
   id: string;
@@ -183,7 +186,7 @@ async function fetchAccountInsights(
     });
 
     // Update account document with latest data
-    const accountRef = db.collection('users').doc(userId).collection('accounts').doc(accountId);
+    const accountRef = getDb().collection('users').doc(userId).collection('accounts').doc(accountId);
     const accountDoc = await accountRef.get();
     const accountData = accountDoc.data();
 
@@ -204,7 +207,7 @@ async function fetchAccountInsights(
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const analyticsRef = db
+    const analyticsRef = getDb()
       .collection('users')
       .doc(userId)
       .collection('accounts')
@@ -229,7 +232,7 @@ async function fetchAccountInsights(
     });
 
     // Store individual posts with their performance metrics
-    const batch = db.batch();
+    const batch = getDb().batch();
     let batchCount = 0;
     const MAX_BATCH = 500;
 
@@ -237,7 +240,7 @@ async function fetchAccountInsights(
       const postMetrics = postInsights.get(post.id);
       if (!postMetrics) continue;
 
-      const postRef = db.collection('users').doc(userId).collection('posts').doc(post.id);
+      const postRef = getDb().collection('users').doc(userId).collection('posts').doc(post.id);
       const engagementRate = postMetrics.views > 0
         ? (postMetrics.likes + postMetrics.replies + postMetrics.reposts) / postMetrics.views
         : 0;
@@ -298,13 +301,13 @@ export const fetchDailyAnalytics = functions.pubsub
 
     try {
       // Get all users
-      const usersSnapshot = await db.collection('users').get();
+      const usersSnapshot = await getDb().collection('users').get();
 
       for (const userDoc of usersSnapshot.docs) {
         const userId = userDoc.id;
 
         // Get all accounts for this user
-        const accountsSnapshot = await db
+        const accountsSnapshot = await getDb()
           .collection('users')
           .doc(userId)
           .collection('accounts')
@@ -358,7 +361,7 @@ export const refreshAccountAnalytics = functions.https.onCall(async (data, conte
 
   try {
     // Get account data
-    const accountRef = db.collection('users').doc(userId).collection('accounts').doc(accountId);
+    const accountRef = getDb().collection('users').doc(userId).collection('accounts').doc(accountId);
     const accountDoc = await accountRef.get();
 
     if (!accountDoc.exists) {
