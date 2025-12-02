@@ -138,16 +138,36 @@ export const PostComposer = ({
   const addTopic = () => {
     const topic = topicInput.trim().replace(/^#/, '');
     if (topic && topic.length > 0 && !watchedFields.topics.includes(topic)) {
+      // Check if topic text already exists in content (to avoid duplicates)
+      const contentLower = (watchedFields.content || '').toLowerCase();
+      const topicLower = topic.toLowerCase();
+      const topicNoSpaces = topicLower.replace(/\s+/g, '');
+      
+      // Don't add topic if it's already in the content
+      if (contentLower.includes(topicLower) || contentLower.includes(topicNoSpaces)) {
+        toast({
+          title: 'Topic already in content',
+          description: `"${topic}" is already in your post content. Topics should be separate from content.`,
+          variant: 'destructive',
+        });
+        setTopicInput('');
+        return;
+      }
+
       const currentTopics = watchedFields.topics || [];
       setValue('topics', [...currentTopics, topic]);
       setTopicInput('');
-      console.log('Topic added:', topic, 'Current topics:', [...currentTopics, topic]);
+      // IMPORTANT: Never modify content when adding topics
+      // Content and topics are completely separate
     } else {
-      console.log('Topic not added. Reason:', {
-        isEmpty: !topic,
-        isDuplicate: watchedFields.topics?.includes(topic),
-        input: topicInput
-      });
+      if (watchedFields.topics?.includes(topic)) {
+        toast({
+          title: 'Duplicate topic',
+          description: 'This topic has already been added.',
+          variant: 'destructive',
+        });
+      }
+      setTopicInput('');
     }
   };
 
@@ -353,14 +373,22 @@ export const PostComposer = ({
 
   // Save post and publish immediately via Cloud Function
   const savePostAndPublish = async (data: PostFormData) => {
+    // Prevent double submission
+    if (isSubmitting) {
+      return;
+    }
+
     try {
       setIsSubmitting(true);
+
+      // Ensure content doesn't include topics - topics should be separate
+      const cleanContent = data.content.trim();
 
       // Prepare post data with proper structure
       const postData = {
         userId: currentUser!.uid,
         accountId: data.accountId,
-        content: data.content,
+        content: cleanContent, // Only the content, topics are separate
         media: media.map((m) => ({
           id: m.id,
           type: m.type,
@@ -373,11 +401,11 @@ export const PostComposer = ({
         status: 'scheduled' as PostStatus,
         scheduledFor: new Date(), // Schedule for immediate publishing
         publishedAt: null,
-        topics: data.topics,
+        topics: data.topics || [], // Topics stored separately
         settings: {
           allowReplies: data.allowReplies,
           whoCanReply: data.whoCanReply,
-          topics: data.topics,
+          topics: data.topics || [],
         },
         updatedAt: serverTimestamp(),
       };
@@ -413,6 +441,9 @@ export const PostComposer = ({
           title: 'Post published!',
           description: 'Your post has been published to Threads.',
         });
+
+        // Close dialog after successful publish
+        onOpenChange(false);
       } catch (error: any) {
         console.error('Error publishing post:', error);
 
@@ -428,8 +459,6 @@ export const PostComposer = ({
           variant: 'destructive',
         });
       }
-
-      onOpenChange(false);
     } catch (error) {
       console.error('Error publishing post:', error);
       toast({

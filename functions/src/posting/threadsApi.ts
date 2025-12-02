@@ -123,13 +123,21 @@ export async function postToThreadsOfficialApi(
           const hashtagLower = hashtagWithHash.toLowerCase();
           const cleanTopicLower = cleanTopic.toLowerCase();
 
-          // Don't add if:
-          // 1. The hashtag is already in content: "#newyork"
-          // 2. The clean topic (no spaces) is already in content: "newyork"
-          // 3. The original topic text is already in content: "new york"
+          // Don't add if the topic or hashtag already exists in content
+          // Check for:
+          // 1. The hashtag: "#newyork"
+          // 2. The clean topic (no spaces): "newyork" 
+          // 3. The original topic text: "new york" or "New York"
+          // Use word boundaries to avoid partial matches
+          const cleanTopicRegex = new RegExp(`\\b${cleanTopicLower}\\b`);
+          const topicWords = topicLower.split(/\s+/);
+          const topicRegex = topicWords.length > 1 
+            ? new RegExp(topicWords.join('\\s+'), 'i')
+            : new RegExp(`\\b${topicLower}\\b`);
+
           if (contentLower.includes(hashtagLower) ||
-              contentLower.includes(cleanTopicLower) ||
-              contentLower.includes(topicLower)) {
+              cleanTopicRegex.test(contentLower) ||
+              topicRegex.test(finalContent)) {
             return null;
           }
 
