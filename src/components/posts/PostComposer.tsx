@@ -494,7 +494,22 @@ export const PostComposer = ({
                   render={({ field }) => (
                     <Select
                       value={field.value}
-                      onValueChange={field.onChange}
+                      onValueChange={(accountId) => {
+                        field.onChange(accountId);
+                        // Auto-select model when account is selected
+                        const selectedAccount = accounts.find(
+                          (acc) => acc.id === accountId
+                        );
+                        if (selectedAccount?.modelIds && selectedAccount.modelIds.length > 0) {
+                          // If account belongs to exactly one model, auto-select it
+                          if (selectedAccount.modelIds.length === 1) {
+                            setSelectedModelId(selectedAccount.modelIds[0]);
+                          } else if (selectedAccount.modelIds.length > 1 && !selectedModelId) {
+                            // If account belongs to multiple models and no model is selected, select the first one
+                            setSelectedModelId(selectedAccount.modelIds[0]);
+                          }
+                        }
+                      }}
                       disabled={isSubmitting}
                     >
                       <SelectTrigger id="account">
